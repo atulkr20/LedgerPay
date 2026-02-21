@@ -2,11 +2,14 @@ openapi: 3.0.0
 info:
   title: LedgerPay API
   version: 1.0.0
-  description: A production-grade FinTech wallet backend using double-entry accounting.
+  description: A production-grade FinTech wallet backend using double-entry accounting, row-level locking, and idempotency.
+servers:
+  - url: http://localhost:3000
 paths:
   /api/wallets/create:
     post:
       summary: Create a new wallet
+      description: Initializes a user wallet with an 'AVAILABLE' ledger account.
       requestBody:
         required: true
         content:
@@ -19,9 +22,25 @@ paths:
         '201':
           description: Wallet created successfully
 
+  /api/wallets/{accountId}/balance:
+    get:
+      summary: Get Wallet Balance
+      description: Calculates real-time balance dynamically by summing all ledger entries.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema:
+            type: string
+          description: The Ledger Account ID
+      responses:
+        '200':
+          description: Balance retrieved
+
   /api/wallets/add-money:
     post:
-      summary: Deposit money into a wallet
+      summary: Deposit Money
+      description: Mints money into a wallet using double-entry accounting.
       parameters:
         - in: header
           name: Idempotency-Key
@@ -34,8 +53,74 @@ paths:
             schema:
               type: object
               properties:
-                accountId: { type: string, example: "paste-account-id-here" }
+                accountId: { type: string, example: "your-account-id" }
                 amount: { type: number, example: 500 }
       responses:
         '200':
           description: Money added successfully
+
+  /api/wallets/transfer:
+    post:
+      summary: Transfer Funds
+      description: Safely moves money between two accounts. Uses SELECT ... FOR UPDATE to prevent race conditions.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string, example: "transfer-ticket-001" }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fromAccountId: { type: string }
+                toAccountId: { type: string }
+                amount: { type: number, example: 50 }
+      responses:
+        '200':
+          description: Transfer successful
+
+  /api/wallets/withdraw:
+    post:
+      summary: Withdraw Funds
+      description: Debits the user's account to simulate a cash-out to a bank.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string, example: "withdraw-ticket-001" }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId: { type: string }
+                amount: { type: number, example: 25 }
+      responses:
+        '200':
+          description: Withdrawal successful
+
+  /api/wallets/refund:
+    post:
+      summary: Refund a Transaction
+      description: Never deletes data. Creates a new transaction with inverted ledger entries (Debits become Credits).
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string, example: "refund-ticket-001" }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                originalTransactionId: { type: string, example: "paste-transaction-id-here" }
+      responses:
+        '200':
+          description: Refund processed
