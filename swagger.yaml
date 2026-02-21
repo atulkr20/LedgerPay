@@ -1,0 +1,41 @@
+openapi: 3.0.0
+info:
+  title: LedgerPay API
+  version: 1.0.0
+  description: A production-grade FinTech wallet backend using double-entry accounting.
+paths:
+  /api/wallets/create:
+    post:
+      summary: Create a new wallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string, example: "user-123" }
+      responses:
+        '201':
+          description: Wallet created successfully
+
+  /api/wallets/add-money:
+    post:
+      summary: Deposit money into a wallet
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string, example: "deposit-ticket-001" }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId: { type: string, example: "paste-account-id-here" }
+                amount: { type: number, example: 500 }
+      responses:
+        '200':
+          description: Money added successfully
