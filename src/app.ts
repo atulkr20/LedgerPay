@@ -1,6 +1,7 @@
-import express from 'express'
+import express, { Request, Response } from 'express'
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
 import path from 'path';
 
 import { walletRoutes } from './routes/wallet.routes';
@@ -12,16 +13,23 @@ app.use(express.json());
 
 const swaggerPath = path.join(__dirname, '../swagger.yaml');
 
-app.get('/swagger.yaml', (_req, res) => {
+app.get('/api-docs.json', (_req: Request, res: Response) => {
+  const swaggerDocument = YAML.load(swaggerPath);
   res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(swaggerPath);
+  return res.json(swaggerDocument);
 });
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(undefined, {
+const swaggerUiOptions = {
   swaggerOptions: {
-    url: '/swagger.yaml',
+    url: '/api-docs.json',
   },
-}));
+};
+
+app.use(
+  '/api-docs',
+  swaggerUi.serveFiles(undefined, swaggerUiOptions),
+  swaggerUi.setup(undefined, swaggerUiOptions),
+);
 
 
 app.use('/api/wallets', walletRoutes);

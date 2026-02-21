@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  title: LedgerPay API
+  title: LedgerPay API 
   version: 1.0.0
   description: A production-grade FinTech wallet backend using double-entry accounting, row-level locking, and idempotency.
 servers:
