@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. A Wallet belongs to a User
+model Wallet {
+  id        String          @id @default(uuid())
+  userId    String          @unique
+  accounts  LedgerAccount[]
+  createdAt DateTime        @default(now())
+}
+
+// 2. A Wallet can have different "Accounts" (e.g., "Available" vs "Held for Uber ride")
+model LedgerAccount {
+  id        String        @id @default(uuid())
+  walletId  String
+  wallet    Wallet        @relation(fields: [walletId], references: [id])
+  type      String        @default("AVAILABLE")
+  entries   LedgerEntry[]
+  createdAt DateTime      @default(now())
+}
+
+// 3. The overall event (e.g., "Transfer $50 from Alice to Bob")
+model Transaction {
+  id          String        @id @default(uuid())
+  referenceId String        @unique // Helps us prevent duplicate transactions
+  type        String        // DEPOSIT, TRANSFER, WITHDRAW, REFUND
+  status      String        @default("PENDING")
+  amount      Decimal       @db.Decimal(20, 4) // We use Decimal, NOT Float, to prevent weird math bugs!
+  entries     LedgerEntry[]
+  createdAt   DateTime      @default(now())
+}
+
+// 4. The actual money movement. A Transfer creates TWO of these: a DEBIT (-) and a CREDIT (+)
+model LedgerEntry {
+  id              String        @id @default(uuid())
+  transactionId   String
+  transaction     Transaction   @relation(fields: [transactionId], references: [id])
+  ledgerAccountId String
+  account         LedgerAccount @relation(fields: [ledgerAccountId], references: [id])
+  entryType       String        // DEBIT or CREDIT
+  amount          Decimal       @db.Decimal(20, 4) 
+  createdAt       DateTime      @default(now())
+}
