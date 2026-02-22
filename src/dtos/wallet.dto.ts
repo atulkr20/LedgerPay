@@ -3,14 +3,15 @@ import { Request, Response, NextFunction } from 'express';
 
 // Validation Middleware
 
-export const validate = (schema: z.AnyZodObject) => {
+export const validate = (schema: z.ZodTypeAny) => {
     return (req: Request, res: Response, next: NextFunction) => {
         try{
             req.body = schema.parse(req.body);
             next();
         } catch (error: any) {
             // 400 if user sent invalid data
-            return res.status(400).json({ error: error.errors });
+            const details = error?.errors ?? error?.issues ?? error?.message ?? 'Invalid request body';
+            return res.status(400).json({ error: details });
         }
 
     };

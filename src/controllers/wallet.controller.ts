@@ -6,10 +6,10 @@ export class WalletController {
         const msg = error?.message || "An unknown error occured";
         console.error(`[WalletController Error]: ${msg}`);
 
-        if (msg.includes("NOT_FOUND")) {
+        if (msg.includes("NOT_FOUND") || msg.toLowerCase().includes("not found")) {
             return res.status(404).json({ error: msg });
         }
-        if (msg.includes("ALREADY_REFUNDED")) {
+        if (msg.includes("ALREADY_REFUNDED") || msg.toLowerCase().includes("already refunded")) {
             return res.status(409).json({ error: msg }); // 409 conflict
         }
         if (msg.includes("INSUFFICIENT_FUNDS")) {
@@ -31,9 +31,13 @@ export class WalletController {
     }
 
     // Handling Check Balance
-    static async balance(req: Request, res: Response) {
+    static async balance(req: Request<{ accountId: string }>, res: Response) {
         try {
-            const balance = await LedgerService.getBalance(req.params.accountId);
+            const accountId = req.params.accountId;
+            if (!accountId) {
+                return res.status(400).json({ error: "accountId is required" });
+            }
+            const balance = await LedgerService.getBalance(accountId);
             return res.json({ success: true, balance });
         } catch (error: any) {
             return this.handleError(error, res);
@@ -66,7 +70,6 @@ export class WalletController {
     static async withdraw(req: Request, res: Response) {
         try {
             const ticketNumber = req.headers['idempotency-key'] as string;
-            const { fromAccountId, toAccountId, amount } = req.body;
             const result = await LedgerService.withdraw(req.body.accountId, req.body.amount, ticketNumber);
             res.json({ success: true, transaction: result});
 

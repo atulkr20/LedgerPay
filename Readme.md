@@ -61,7 +61,7 @@ Create a `.env` file in the root directory and configure the following:
 
 ```env
 # Database Connections
-DATABASE_URL="postgresql://postgres:password@localhost:5432/wallet_db?schema=public"
+DATABASE_URL="postgresql://postgres:password@localhost:5433/wallet_db?schema=public"
 REDIS_URL="redis://localhost:6379"
 
 # Application Config
