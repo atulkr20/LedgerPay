@@ -19,32 +19,14 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 ## System Architecture & Transaction Flow (Beginner Friendly)
 
-This diagram shows the simple flow of a request from the client to the database and back.
-
 ```mermaid
 flowchart LR
-  A[Client] --> B[API Routes]
+  A[Client] --> B[API Request]
   B --> C[Validation + Idempotency]
-  C --> D[Service Layer]
-  D --> E[(PostgreSQL)]
-  D --> F[(Redis)]
-  E --> G[Response]
-  F --> G
+  C --> D[Service Logic]
+  D --> E[(PostgreSQL Transaction)]
+  E --> F[Response]
 ```
-
-**Step-by-Step Flow:**
-1. Client sends a request to the API.
-2. Request is validated and checked for idempotency.
-3. Service layer runs the business logic.
-4. Database writes happen inside a transaction.
-5. Redis stores the idempotency result.
-6. The API returns a response to the client.
-
-**Inside the Database Transaction:**
-1. Lock the relevant account rows to prevent race conditions.
-2. Check the current balance.
-3. Create a transaction record plus matching debit/credit ledger entries.
-4. Commit if everything succeeds, or rollback on error.
 
 ## System Design Notes
 
