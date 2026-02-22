@@ -40,6 +40,12 @@ flowchart LR
 5. Redis stores the idempotency result.
 6. The API returns a response to the client.
 
+**Inside the Database Transaction:**
+1. Lock the relevant account rows to prevent race conditions.
+2. Check the current balance.
+3. Create a transaction record plus matching debit/credit ledger entries.
+4. Commit if everything succeeds, or rollback on error.
+
 ## System Design Notes
 
 1. **Ledger Invariant:** Every money movement creates equal and opposite entries. The sum of all `LedgerEntry` rows for a single transaction should net to zero.
