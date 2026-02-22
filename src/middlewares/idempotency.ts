@@ -25,8 +25,13 @@ export const idempotency = async (req: Request, res: Response, next: NextFunctio
 
         res.json = (body: any) => {
             // save the final receipt in redis for 24 hours 
-            redis.set(`idempotency:${ticketNumber}`, JSON.stringify(body), 'EX', 86400).catch(console.error);
+            if(res.statusCode >= 200 && res.statusCode<300) {
+                redis.set(`idempotency:${ticketNumber}`, JSON.stringify(body), 'EX', 86400).catch(console.error);
 
+            } else {
+                console.log(`Request failed with ${res.statusCode}. Not caching this attempt`)
+            }
+            // send the response to the user 
             return originalSendFunction(body);
         };
 

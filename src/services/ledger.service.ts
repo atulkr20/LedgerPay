@@ -74,13 +74,14 @@ export class LedgerService {
             // lock account in same exact order.
             // This prevents the DeadLocks where two transfers freeze each other.
 
-            const accountsToLock = [fromAccountId, toAccountId].sort();
+            const accountIds = [fromAccountId, toAccountId].sort();
 
-            await tx.$executeRawUnsafe(
-                `SELECT id FROM "LedgerAccount" WHERE id IN ($1, $2) FOR UPDATE`,
-                ...accountsToLock
-                // FOR UPDATE Locks these two rows so that nobody else can read or change them until I'm done.
-            );
+            await tx.$executeRaw`
+            SELECT id FROM "LedgerAccount"
+            WHERE id IN (${Prisma.join(accountIds)})
+            FOR UPDATE
+            `;
+            // FOR UPDATE locks these two rows so that nobody else can read or change them until I'm done.
 
             // Checking the balance 
             // We ask db to add up all previous transactions for sender
@@ -93,7 +94,7 @@ export class LedgerService {
             // If Broke, Throw an Error
 
             if (curentBalance.lessThan(safeAmount)) {
-                throw new Error ( "You do not have enough money for this transfer");
+                throw new Error ( "INSUFFICIENT_FUNDS");
             }
 
             // Printing the RECEIPT
@@ -118,7 +119,7 @@ export class LedgerService {
                     //Credit: Add the money to the Receiver
                     {
                         transactionId: transactionRecord.id,
-                        ledgerAccountId: fromAccountId,
+                        ledgerAccountId: toAccountId,
                         entryType: 'CREDIT',
                         amount: safeAmount
                     }
@@ -137,10 +138,11 @@ export class LedgerService {
 
         return prisma.$transaction(async (tx) => {
             // Lock only the user's row
-            await tx.$executeRawUnsafe(
-                `SELECT id FROM "LedgerAccount" WHERE id = $1 FOR UPDATE`,
-                accountId
-            );
+            await tx.$executeRaw`
+    SELECT id FROM "LedgerAccount" 
+    WHERE id = ${accountId} 
+    FOR UPDATE
+  `;
 
             //Check balance safely
 
