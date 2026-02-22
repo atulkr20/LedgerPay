@@ -1,16 +1,17 @@
 import { Router } from "express";
 import { WalletController } from "../controllers/wallet.controller";
 import { idempotency } from "../middlewares/idempotency";
-
+import { validate, CreateWalletSchema, AmountSchema, TransferSchema, RefundSchema} from '../dtos/wallet.dto';
 export const walletRoutes = Router();
 
 
-walletRoutes.post('/create', WalletController.create);
+// User -> Router -> idempotency -> Controller
+walletRoutes.post('/create', validate(CreateWalletSchema), WalletController.create);
 walletRoutes.get('/:accountId/balance', WalletController.balance);
 
-walletRoutes.post('/add-money', idempotency, WalletController.addMoney);
-walletRoutes.post('/transfer', idempotency, WalletController.transfer);
-walletRoutes.post('/withdraw', idempotency, WalletController.withdraw);
-walletRoutes.post('/refund', idempotency, WalletController.refund);
 
-// User -> Router -> idempotency -> Controller
+// Routes with idempotency and input validation
+walletRoutes.post('/add-money', validate(AmountSchema), idempotency, WalletController.addMoney);
+walletRoutes.post('/transfer', validate(TransferSchema), idempotency, WalletController.transfer);
+walletRoutes.post('/withdraw', validate(AmountSchema), idempotency, WalletController.withdraw);
+walletRoutes.post('/refund', validate(RefundSchema), idempotency, WalletController.refund);

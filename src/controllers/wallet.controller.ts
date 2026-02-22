@@ -2,83 +2,86 @@ import { Request, Response } from 'express';
 import { LedgerService } from '../services/ledger.service';
 
 export class WalletController {
-    // Creating wallet
+    private static handleError(error: any, res: Response) {
+        const msg = error?.message || "An unknown error occured";
+        console.error(`[WalletController Error]: ${msg}`);
 
+        if (msg.includes("NOT_FOUND")) {
+            return res.status(404).json({ error: msg });
+        }
+        if (msg.includes("ALREADY_REFUNDED")) {
+            return res.status(409).json({ error: msg }); // 409 conflict
+        }
+        if (msg.includes("INSUFFICIENT_FUNDS")) {
+            return res.status(422).json({ error: msg }); // 422 Unprocessable entity
+        }
+
+        // If we don't recognize the error, it's a 500 server error
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+
+    // Handling Create Wallet
     static async create(req: Request, res: Response) {
-
-        try{
-            const {userId} = req.body;
-            const wallet = await LedgerService.createWallet(userId);
-
-            res.status(201).json({ success: true, data: wallet });
+        try {
+            const wallet = await LedgerService.createWallet(req.body.userId);
+            return res.status(201).json({ success: true, data: wallet });
         } catch (error: any) {
-            res.status(400).json({ error: error.message });
+            return this.handleError(error, res);
         }
     }
 
-    // handle balance checks
-    static async balance(req: Request, res: Response ) {
-        try{
-            const accountId = req.params.accountId as string;
-            if (!accountId) {
-                return res.status(400).json({ error: "accountId is required" });
-            }
-            const balance = await LedgerService.getBalance(accountId);
-            res.json({ success: true, balance})
+    // Handling Check Balance
+    static async balance(req: Request, res: Response) {
+        try {
+            const balance = await LedgerService.getBalance(req.params.accountId);
+            return res.json({ success: true, balance });
         } catch (error: any) {
-            res.status(400).json({ error: error.message});
+            return this.handleError(error, res);
         }
     }
-
-    // Handling Deposits 
+    
+    // Handling Add money
     static async addMoney(req: Request, res: Response) {
-        try{
+        try {
             const ticketNumber = req.headers['idempotency-key'] as string;
-            const { accountId, amount } = req.body;
-
-            const result = await LedgerService.addMoney(accountId, amount, ticketNumber);
-            res.json({ success: true, transaction: result });
-        } catch (error: any) {
-            res.status(400).json({ error: error.message });
-        }
-    }
-
-    // Handling the Transfers
-    static async transfer(req: Request, res: Response) {
-    try {
-      const ticketNumber = req.headers['idempotency-key'] as string;
-      const { fromAccountId, toAccountId, amount } = req.body;
-      
-      const result = await LedgerService.transfer(fromAccountId, toAccountId, amount, ticketNumber);
-      res.json({ success: true, transaction: result });
-    } catch (error: any) { 
-      res.status(400).json({ error: error.message }); 
-    }
-  }
-
-    // Handling Withdrawals
-    static async withdraw(req: Request, res: Response) {
-        try{
-            const ticketNumber =req.headers['idempotency-key'] as string;
-            const { accountId, amount } = req.body;
-
-            const result = await LedgerService.withdraw(accountId, amount, ticketNumber);
+            const result = await  LedgerService.addMoney(req.body.accountId, req.body.amount, ticketNumber);
             res.json({ success: true, transaction: result});
-        } catch (error: any) {
-            res.status(400).json({ error: error.message });
+        } catch (error: any) { this.handleError(error, res);
+
         }
-    };
+    }
+    // Handling Transfers
+    static async transfer(req: Request, res: Response) {
+
+        try {
+            const ticketNumber = req.headers['idempotency-key'] as string;
+            const { fromAccountId , toAccountId, amount } = req.body;
+            const result = await LedgerService.transfer(fromAccountId, toAccountId, amount, ticketNumber);
+            res.json({ success: true, transaction: result })
+        } catch(error: any) { this.handleError(error, res);
+
+        }
+    }
+    // Handling Withdraw
+    static async withdraw(req: Request, res: Response) {
+        try {
+            const ticketNumber = req.headers['idempotency-key'] as string;
+            const { fromAccountId, toAccountId, amount } = req.body;
+            const result = await LedgerService.withdraw(req.body.accountId, req.body.amount, ticketNumber);
+            res.json({ success: true, transaction: result});
+
+        } catch(error: any) { this.handleError(error, res); }
+    }
 
     // Handling Refunds
     static async refund(req: Request, res: Response) {
         try {
             const ticketNumber = req.headers['idempotency-key'] as string;
-            const { originalTransactionId } = req.body;
-
-            const result = await LedgerService.refund(originalTransactionId, ticketNumber);
-            res.json({ success: true, transaction: result });
-        } catch (error: any) {
-            res.status(400).json({ error: error.message });
+            const result = await LedgerService.refund(req.body.originalTransactionId, ticketNumber);
+            res.json({ success: true, transaction: result});
+        } catch (error: any) { this.handleError(error, res);
+            
         }
     }
+
 }
