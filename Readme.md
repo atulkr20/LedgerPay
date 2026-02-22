@@ -1,4 +1,4 @@
-# 🏦 LedgerPay: Production-Grade Digital Wallet
+# LedgerPay: Production-Grade Digital Wallet
 
 ![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
 ![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)
@@ -9,7 +9,7 @@
 
 LedgerPay is a high-performance FinTech backend designed to handle digital wallet transactions securely. Instead of storing fragile "balance" columns that are prone to race conditions, it calculates balances dynamically using a true **Double-Entry Accounting Ledger**. This mirrors the architecture used by financial giants like Stripe and Square.
 
-## ✨ Core Engineering Features
+## Core Engineering Features
 
 * **Double-Entry Accounting:** Balances are never stored directly. Every transaction creates two immutable `LedgerEntry` records (a Debit and a Credit) that must always net to zero.
 * **Concurrency Control (Row-Level Locking):** Uses PostgreSQL `SELECT ... FOR UPDATE` to lock wallet rows during transactions. This strictly prevents "Double-Spend" race conditions if a user fires multiple rapid requests. Deadlocks are avoided by sorting account IDs lexicographically before locking.
@@ -17,13 +17,27 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 * **Financial Immutability:** Transactions are never deleted or updated. Refunds are handled by creating a completely new transaction that generates inverse ledger entries (turning previous Debits into Credits).
 * **ACID Compliance:** All money movements are wrapped in `prisma.$transaction`. If a process fails mid-execution, the entire operation safely rolls back.
 
-## 📋 Prerequisites
+## System Architecture & Transaction Flow
+
+The following diagram illustrates the lifecycle of a secure money transfer within LedgerPay, highlighting the idempotency layer and database locking mechanisms.
+
+
+
+**Step-by-Step Flow:**
+1. The HTTP Request hits the Express router.
+2. **Redis Middleware** checks the `Idempotency-Key` to ensure this exact transfer hasn't already been processed today.
+3. The **Service Layer** locks both the Sender and Receiver database rows in alphabetical order (`FOR UPDATE`).
+4. The system calculates the Sender's balance dynamically via `SUM()`. If funds are sufficient, a Transaction record is generated.
+5. Two `LedgerEntry` records are created: a **Debit** to the Sender, and a **Credit** to the Receiver.
+6. The database transaction commits, rows are automatically unlocked, and Redis saves the successful receipt.
+
+## Prerequisites
 
 Before you begin, ensure you have the following installed:
 * [Node.js](https://nodejs.org/) (v18 or higher)
 * [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for PostgreSQL and Redis containers)
 
-## ⚙️ Environment Variables
+## Environment Variables
 
 Create a `.env` file in the root directory and configure the following:
 
@@ -36,7 +50,7 @@ REDIS_URL="redis://localhost:6379"
 PORT=3000
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 **1. Clone the repository & install dependencies:**
 ```bash
@@ -63,41 +77,32 @@ npm run dev
 
 **5. Explore the API:**
 Navigate to the interactive Swagger UI to test endpoints directly from your browser:  
-👉 **http://localhost:3000/api-docs**
+`http://localhost:3000/api-docs`
 
-## 🌐 API Endpoints Reference
+## API Endpoints Reference
 
 | Method | Endpoint | Description | Idempotency Required? |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/wallets/create` | Initializes a new user wallet. | ❌ |
-| `GET` | `/api/wallets/:accountId/balance` | Calculates the real-time balance dynamically. | ❌ |
-| `POST` | `/api/wallets/add-money` | Mints money into a wallet (Credit). | ✅ |
-| `POST` | `/api/wallets/transfer` | Safely moves money between two accounts. | ✅ |
-| `POST` | `/api/wallets/withdraw` | Debits a user account simulating a cash-out. | ✅ |
-| `POST` | `/api/wallets/refund` | Inverts a previous transaction securely. | ✅ |
+| `POST` | `/api/wallets/create` | Initializes a new user wallet. | No |
+| `GET` | `/api/wallets/:accountId/balance` | Calculates the real-time balance dynamically. | No |
+| `POST` | `/api/wallets/add-money` | Mints money into a wallet (Credit). | Yes |
+| `POST` | `/api/wallets/transfer` | Safely moves money between two accounts. | Yes |
+| `POST` | `/api/wallets/withdraw` | Debits a user account simulating a cash-out. | Yes |
+| `POST` | `/api/wallets/refund` | Inverts a previous transaction securely. | Yes |
 
 *Note: All state-mutating financial routes require an `Idempotency-Key` header to prevent duplicate processing.*
 
-## 📂 Architecture & Folder Structure 
+## Architecture & Folder Structure 
 
 LedgerPay follows Clean Architecture principles, ensuring a strict separation of concerns:
 
 ```text
 src/
 ├── config/             # Database and Redis client singletons
-├── controllers/        # Express route handlers (Traffic Cops)
+├── controllers/        # Express route handlers
 ├── middleware/         # Idempotency logic and error handling
 ├── routes/             # API routing definitions
 ├── services/           # Core financial business logic and Prisma transactions
 ├── app.ts              # Express application setup and Swagger configuration
 └── server.ts           # Application entry point
 ```
-
-## 💡 System Flow Example: A $50 Transfer
-
-1. The HTTP Request hits the Express router.
-2. **Redis Middleware** checks the `Idempotency-Key` to ensure this exact transfer hasn't already been processed today.
-3. The **Service Layer** locks both the Sender and Receiver database rows in alphabetical order (`FOR UPDATE`).
-4. The system calculates the Sender's balance dynamically via `SUM()`. If funds are sufficient, a Transaction record is generated.
-5. Two `LedgerEntry` records are created: a **$50 Debit** to the Sender, and a **$50 Credit** to the Receiver.
-6. The database transaction commits, rows are automatically unlocked, and Redis saves the successful receipt.
