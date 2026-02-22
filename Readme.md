@@ -49,6 +49,12 @@ flowchart LR
 5. Two `LedgerEntry` records are created: a **Debit** to the Sender, and a **Credit** to the Receiver.
 6. The database transaction commits, rows are automatically unlocked, and Redis saves the successful receipt.
 
+## System Design Notes
+
+1. **Ledger Invariant:** Every money movement creates equal and opposite entries. The sum of all `LedgerEntry` rows for a single transaction should net to zero.
+2. **Idempotency Guarantee:** Write endpoints require an `Idempotency-Key`, and a successful response is cached in Redis for 24 hours to prevent duplicates.
+3. **Consistency Model:** All writes happen inside a single database transaction, with row-level locking to prevent double-spend races.
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
@@ -96,6 +102,11 @@ npm run dev
 **5. Explore the API:**
 Navigate to the interactive Swagger UI to test endpoints directly from your browser:  
 `http://localhost:3000/api-docs`
+
+## Testing
+
+1. Start Postgres and Redis: `docker-compose up -d`
+2. Run tests: `npm test`
 
 ## API Endpoints Reference
 
