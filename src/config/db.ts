@@ -3,7 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const connectionString = process.env.DATABASE_URL;
 

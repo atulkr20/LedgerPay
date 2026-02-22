@@ -6,6 +6,7 @@
   "scripts": {
     "start": "ts-node src/server.ts",
     "dev": "nodemon --watch src --watch swagger.yaml --ext ts,json,yaml,yml src/server.ts",
+    "pretest": "prisma db push",
     "test": "jest"
   },
   "keywords": [],
