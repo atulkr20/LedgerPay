@@ -98,6 +98,12 @@ Navigate to the interactive Swagger UI to test endpoints directly from your brow
 1. Start Postgres and Redis: `docker-compose up -d`
 2. Run tests: `npm test`
 
+## Test Strategy
+
+1. **Validation tests**: ensure invalid inputs are rejected early (Zod + middleware).
+2. **Integration tests**: run against real Postgres + Redis to verify transactions and idempotency.
+3. **Critical paths**: create wallet, add money, transfer, refund.
+
 ## API Endpoints Reference
 
 | Method | Endpoint | Description | Idempotency Required? |
