@@ -21,11 +21,22 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 ```mermaid
 flowchart LR
-  A[Client] --> B[API Request]
-  B --> C[Validation + Idempotency]
-  C --> D[Service Logic]
-  D --> E[(PostgreSQL Transaction)]
-  E --> F[Response]
+  Client[Client] -->|HTTP| Router[Express Router]
+  Router --> Validate[Zod Validation]
+  Validate --> Idem[Idempotency Middleware]
+  Idem -->|Check Key| Redis[(Redis)]
+  Redis -->|Hit: cached response| ReturnCached[Return cached response]
+  Redis -->|Miss| Service[LedgerService]
+  Service -->|prisma.$transaction| TX[(PostgreSQL)]
+  TX -->|SELECT ... FOR UPDATE| Lock[Lock LedgerAccount rows]
+  TX -->|SUM LedgerEntry| Balance[Balance Check]
+  Balance -->|OK| TxCreate[Create Transaction]
+  TxCreate --> Entries[Create LedgerEntry rows]
+  Entries --> Commit[COMMIT]
+  Commit --> RedisSave[Save response in Redis]
+  RedisSave --> Response[Return response]
+  Balance -->|Insufficient| Rollback[ROLLBACK]
+  Rollback --> ErrorResp[Return error]
 ```
 
 ## System Design Notes
