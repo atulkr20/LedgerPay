@@ -21,7 +21,25 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 The following diagram illustrates the lifecycle of a secure money transfer within LedgerPay, highlighting the idempotency layer and database locking mechanisms.
 
-
+```mermaid
+flowchart LR
+  A[Client] -->|POST /api/wallets/transfer| B[Express Router]
+  B --> C[Idempotency Middleware]
+  C -->|Check Idempotency-Key| D{Redis Cache}
+  D -->|Hit| E[Return Saved Response]
+  D -->|Miss| F[LedgerService.transfer]
+  F -->|BEGIN TX| G[(PostgreSQL)]
+  G -->|SELECT ... FOR UPDATE| H[Lock Accounts]
+  G -->|SUM LedgerEntry| I[Balance Check]
+  I -->|Sufficient| J[Create Transaction]
+  J --> K[Create Debit/Credit Entries]
+  K -->|COMMIT| L[DB Commit]
+  L --> M[Save Response in Redis]
+  M --> N[Return Response]
+  I -->|Insufficient| O[Throw Error]
+  O --> P[Rollback TX]
+  P --> N
+```
 
 **Step-by-Step Flow:**
 1. The HTTP Request hits the Express router.
