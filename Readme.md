@@ -17,37 +17,28 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 * **Financial Immutability:** Transactions are never deleted or updated. Refunds are handled by creating a completely new transaction that generates inverse ledger entries (turning previous Debits into Credits).
 * **ACID Compliance:** All money movements are wrapped in `prisma.$transaction`. If a process fails mid-execution, the entire operation safely rolls back.
 
-## System Architecture & Transaction Flow
+## System Architecture & Transaction Flow (Beginner Friendly)
 
-The following diagram illustrates the lifecycle of a secure money transfer within LedgerPay, highlighting the idempotency layer and database locking mechanisms.
+This diagram shows the simple flow of a request from the client to the database and back.
 
 ```mermaid
 flowchart LR
-  A[Client] -->|POST /api/wallets/transfer| B[Express Router]
-  B --> C[Idempotency Middleware]
-  C -->|Check Idempotency-Key| D{Redis Cache}
-  D -->|Hit| E[Return Saved Response]
-  D -->|Miss| F[LedgerService.transfer]
-  F -->|BEGIN TX| G[(PostgreSQL)]
-  G -->|SELECT ... FOR UPDATE| H[Lock Accounts]
-  G -->|SUM LedgerEntry| I[Balance Check]
-  I -->|Sufficient| J[Create Transaction]
-  J --> K[Create Debit/Credit Entries]
-  K -->|COMMIT| L[DB Commit]
-  L --> M[Save Response in Redis]
-  M --> N[Return Response]
-  I -->|Insufficient| O[Throw Error]
-  O --> P[Rollback TX]
-  P --> N
+  A[Client] --> B[API Routes]
+  B --> C[Validation + Idempotency]
+  C --> D[Service Layer]
+  D --> E[(PostgreSQL)]
+  D --> F[(Redis)]
+  E --> G[Response]
+  F --> G
 ```
 
 **Step-by-Step Flow:**
-1. The HTTP Request hits the Express router.
-2. **Redis Middleware** checks the `Idempotency-Key` to ensure this exact transfer hasn't already been processed today.
-3. The **Service Layer** locks both the Sender and Receiver database rows in alphabetical order (`FOR UPDATE`).
-4. The system calculates the Sender's balance dynamically via `SUM()`. If funds are sufficient, a Transaction record is generated.
-5. Two `LedgerEntry` records are created: a **Debit** to the Sender, and a **Credit** to the Receiver.
-6. The database transaction commits, rows are automatically unlocked, and Redis saves the successful receipt.
+1. Client sends a request to the API.
+2. Request is validated and checked for idempotency.
+3. Service layer runs the business logic.
+4. Database writes happen inside a transaction.
+5. Redis stores the idempotency result.
+6. The API returns a response to the client.
 
 ## System Design Notes
 
