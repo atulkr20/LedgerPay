@@ -7,17 +7,32 @@
 ![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 
-LedgerPay is a high-performance FinTech backend designed to handle digital wallet transactions securely. Instead of storing fragile "balance" columns that are prone to race conditions, it calculates balances dynamically using a true **Double-Entry Accounting Ledger**. This mirrors the architecture used by financial giants like Stripe and Square.
+LedgerPay is a high-performance FinTech backend designed to handle digital wallet transactions securely. Instead of storing fragile "balance" columns that are prone to race conditions, it calculates balances dynamically using a true **Double-Entry Accounting Ledger**. This mirrors the architecture used by financial platforms that rely on strong financial invariants and auditability.
+
+## Resume Highlights
+
+- Built a TypeScript + Node.js wallet system with **double-entry transfers** and **ACID** guarantees.
+- Prevented double-spend with **row-level locking** and deterministic lock ordering.
+- Implemented **idempotent write APIs** using Redis to eliminate duplicate charges on retries.
+- Designed immutable transaction flows with **refund-by-reversal** for full audit trails.
+
+## Tech Stack
+
+- Runtime: Node.js (TypeScript)
+- API: Express + Swagger (OpenAPI)
+- Data: PostgreSQL + Prisma ORM
+- Cache: Redis
+- Testing: Jest
 
 ## Core Engineering Features
 
-* **Double-Entry Accounting:** Balances are never stored directly. Every transaction creates two immutable `LedgerEntry` records (a Debit and a Credit) that must always net to zero.
-* **Concurrency Control (Row-Level Locking):** Uses PostgreSQL `SELECT ... FOR UPDATE` to lock wallet rows during transactions. This strictly prevents "Double-Spend" race conditions if a user fires multiple rapid requests. Deadlocks are avoided by sorting account IDs lexicographically before locking.
-* **Idempotency Engine:** Integrates a Redis caching middleware layer. It checks `Idempotency-Key` headers to ensure network retries do not result in duplicate financial charges.
-* **Financial Immutability:** Transactions are never deleted or updated. Refunds are handled by creating a completely new transaction that generates inverse ledger entries (turning previous Debits into Credits).
+* **Double-Entry Transfers:** Balances are never stored directly. Transfers create two immutable `LedgerEntry` rows (a Debit and a Credit). Deposits and withdrawals create a single signed entry.
+* **Concurrency Control (Row-Level Locking):** Uses PostgreSQL `SELECT ... FOR UPDATE` to lock wallet rows for transfers and withdrawals. Deadlocks are avoided by sorting account IDs lexicographically before locking.
+* **Idempotency Engine:** Integrates a Redis caching middleware layer. It checks `Idempotency-Key` headers on state-changing routes to ensure retries do not duplicate processing.
+* **Financial Immutability:** Transactions are never deleted. Refunds are handled by creating a new transaction with inverse ledger entries and marking the original transaction as reversed.
 * **ACID Compliance:** All money movements are wrapped in `prisma.$transaction`. If a process fails mid-execution, the entire operation safely rolls back.
 
-## System Architecture & Transaction Flow (Beginner Friendly)
+## System Architecture & Transaction Flow (Transfer)
 
 ```mermaid
 flowchart LR
@@ -39,11 +54,42 @@ flowchart LR
   Rollback --> ErrorResp[Return error]
 ```
 
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as API
+  participant R as Redis
+  participant P as Postgres
+
+  C->>A: POST /api/wallets/transfer (Idempotency-Key)
+  A->>R: GET idempotency:{key}
+  alt cache hit
+    R-->>A: cached response
+    A-->>C: 200 OK (cached)
+  else cache miss
+    A->>P: BEGIN; SELECT ... FOR UPDATE
+    A->>P: balance check (SUM LedgerEntry)
+    A->>P: INSERT Transaction + LedgerEntry x2
+    A->>P: COMMIT
+    A->>R: SET idempotency:{key}
+    A-->>C: 200 OK
+  end
+```
+
 ## System Design Notes
 
-1. **Ledger Invariant:** Every money movement creates equal and opposite entries. The sum of all `LedgerEntry` rows for a single transaction should net to zero.
-2. **Idempotency Guarantee:** Write endpoints require an `Idempotency-Key`, and a successful response is cached in Redis for 24 hours to prevent duplicates.
-3. **Consistency Model:** All writes happen inside a single database transaction, with row-level locking to prevent double-spend races.
+1. **Ledger Invariant:** Transfers create equal and opposite entries that net to zero. Deposits and withdrawals use a single signed entry.
+2. **Idempotency Guarantee:** State-changing endpoints (add money, transfer, withdraw, refund) require an `Idempotency-Key`, and successful responses are cached in Redis for 24 hours.
+3. **Consistency Model:** All writes happen inside a single database transaction; transfers and withdrawals use row-level locking to prevent double-spend races.
+
+## Data Model (Conceptual)
+
+- `LedgerAccount`: wallet owner/account reference
+- `Transaction`: immutable record representing a money movement
+- `LedgerEntry`: debit/credit row linked to a `Transaction` and `LedgerAccount`
+
+Balance is derived as: $\text{balance} = \sum \text{credits} - \sum \text{debits}$
+Balance is derived as: $\text{balance} = \sum \text{amount}$
 
 ## Prerequisites
 
@@ -115,7 +161,7 @@ Navigate to the interactive Swagger UI to test endpoints directly from your brow
 | `POST` | `/api/wallets/withdraw` | Debits a user account simulating a cash-out. | Yes |
 | `POST` | `/api/wallets/refund` | Inverts a previous transaction securely. | Yes |
 
-*Note: All state-mutating financial routes require an `Idempotency-Key` header to prevent duplicate processing.*
+*Note: State-mutating routes (add money, transfer, withdraw, refund) require an `Idempotency-Key` header to prevent duplicate processing.*
 
 ## Architecture & Folder Structure 
 
@@ -125,9 +171,20 @@ LedgerPay follows Clean Architecture principles, ensuring a strict separation of
 src/
 ├── config/             # Database and Redis client singletons
 ├── controllers/        # Express route handlers
-├── middleware/         # Idempotency logic and error handling
+├── middlewares/        # Idempotency logic and error handling
 ├── routes/             # API routing definitions
 ├── services/           # Core financial business logic and Prisma transactions
 ├── app.ts              # Express application setup and Swagger configuration
 └── server.ts           # Application entry point
 ```
+
+## Operational Considerations
+
+- **Immutability by design:** corrections use reversal transactions instead of edits.
+- **Failure safety:** any step failure in a money movement rolls back the full unit of work.
+- **Deterministic locking:** account IDs are sorted before locking to minimize deadlocks.
+
+## Scripts
+
+- `npm run dev` - start development server
+- `npm test` - run test suite
