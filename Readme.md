@@ -9,13 +9,6 @@
 
 LedgerPay is a high-performance FinTech backend designed to handle digital wallet transactions securely. Instead of storing fragile "balance" columns that are prone to race conditions, it calculates balances dynamically using a true **Double-Entry Accounting Ledger**. This mirrors the architecture used by financial platforms that rely on strong financial invariants and auditability.
 
-## Resume Highlights
-
-- Built a TypeScript + Node.js wallet system with **double-entry transfers** and **ACID** guarantees.
-- Prevented double-spend with **row-level locking** and deterministic lock ordering.
-- Implemented **idempotent write APIs** using Redis to eliminate duplicate charges on retries.
-- Designed immutable transaction flows with **refund-by-reversal** for full audit trails.
-
 ## Tech Stack
 
 - Runtime: Node.js (TypeScript)
@@ -67,7 +60,7 @@ sequenceDiagram
     R-->>A: cached response
     A-->>C: 200 OK (cached)
   else cache miss
-    A->>P: BEGIN; SELECT ... FOR UPDATE
+    A->>P: BEGIN + SELECT FOR UPDATE
     A->>P: balance check (SUM LedgerEntry)
     A->>P: INSERT Transaction + LedgerEntry x2
     A->>P: COMMIT
