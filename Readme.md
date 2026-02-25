@@ -29,6 +29,8 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 <img src="./Ledger Pay transfer flow architecture.png" width="500" alt="System Architecture & Transaction Flow">
 
+Editable source: [docs/ledgerpay-architecture.excalidraw](./docs/ledgerpay-architecture.excalidraw)
+
 This diagram illustrates LedgerPay's transfer workflow.
 
 A database transaction is initiated before debiting the sender wallet.
