@@ -27,47 +27,14 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 ## System Architecture & Transaction Flow (Transfer)
 
-```mermaid
-flowchart LR
-  Client[Client] -->|HTTP| Router[Express Router]
-  Router --> Validate[Zod Validation]
-  Validate --> Idem[Idempotency Middleware]
-  Idem -->|Check Key| Redis[(Redis)]
-  Redis -->|Hit: cached response| ReturnCached[Return cached response]
-  Redis -->|Miss| Service[LedgerService]
-  Service -->|prisma.$transaction| TX[(PostgreSQL)]
-  TX -->|SELECT ... FOR UPDATE| Lock[Lock LedgerAccount rows]
-  TX -->|SUM LedgerEntry| Balance[Balance Check]
-  Balance -->|OK| TxCreate[Create Transaction]
-  TxCreate --> Entries[Create LedgerEntry rows]
-  Entries --> Commit[COMMIT]
-  Commit --> RedisSave[Save response in Redis]
-  RedisSave --> Response[Return response]
-  Balance -->|Insufficient| Rollback[ROLLBACK]
-  Rollback --> ErrorResp[Return error]
-```
+![System Architecture & Transaction Flow](./Ledger%20Pay%20transfer%20flow%20architecture.png)
 
-```mermaid
-sequenceDiagram
-  participant C as Client
-  participant A as API
-  participant R as Redis
-  participant P as Postgres
+This diagram illustrates LedgerPay's transfer workflow.
 
-  C->>A: POST /api/wallets/transfer (Idempotency-Key)
-  A->>R: GET idempotency:{key}
-  alt cache hit
-    R-->>A: cached response
-    A-->>C: 200 OK (cached)
-  else cache miss
-    A->>P: BEGIN + SELECT FOR UPDATE
-    A->>P: balance check (SUM LedgerEntry)
-    A->>P: INSERT Transaction + LedgerEntry x2
-    A->>P: COMMIT
-    A->>R: SET idempotency:{key}
-    A-->>C: 200 OK
-  end
-```
+A database transaction is initiated before debiting the sender wallet.
+Both debit and credit occur atomically using double-entry accounting.
+
+If any step fails, the entire transaction is rolled back to preserve balance consistency.
 
 ## System Design Notes
 
