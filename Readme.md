@@ -28,16 +28,117 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 * **Financial Immutability:** Transactions are never deleted. Refunds are handled by creating a new transaction with inverse ledger entries and marking the original transaction as reversed.
 * **ACID Compliance:** All money movements are wrapped in `prisma.$transaction`. If a process fails mid-execution, the entire operation safely rolls back.
 
-## System Architecture & Transaction Flow (Transfer)
+## System Architecture
 
-<img src="./Ledgerpay transfer flow architecture.png" width="600" alt="LedgerPay System Flow Diagram">
+```mermaid
+graph TB
+    subgraph Client["Client / API Consumer"]
+        API_REQ[HTTP Request]
+    end
 
-This diagram illustrates LedgerPay's transfer workflow.
+    subgraph Auth["Authentication Layer"]
+        SIGNUP[POST /auth/signup]
+        LOGIN[POST /auth/login]
+        JWT_MW[JWT Middleware]
+    end
 
-A database transaction is initiated before debiting the sender wallet.
-Both debit and credit occur atomically using double-entry accounting.
+    subgraph WalletOps["Wallet Operations Layer"]
+        BALANCE[GET /balance]
+        HISTORY[GET /history]
+        ADD[POST /add-money 🔑]
+        TRANSFER[POST /transfer 🔑]
+        WITHDRAW[POST /withdraw 🔑]
+        REFUND[POST /refund 🔑]
+    end
 
-If any step fails, the entire transaction is rolled back to preserve balance consistency.
+    subgraph Idempotency["Idempotency Engine"]
+        REDIS_CHECK{Redis Cache Check}
+        LOCK[10s Processing Lock]
+        CACHE[24h Result Cache]
+    end
+
+    subgraph BizLogic["Business Logic - LedgerService"]
+        CREATE_WALLET[createWallet]
+        GET_BALANCE[getBalance]
+        ADD_MONEY[addMoney]
+        TRANSFER_LOGIC[transfer - Row Lock]
+        WITHDRAW_LOGIC[withdraw - Row Lock]
+        REFUND_LOGIC[refund]
+        GET_HISTORY[getTransactionHistory]
+    end
+
+    subgraph DB["Database - PostgreSQL"]
+        TX_START[BEGIN TRANSACTION]
+        LOCK_ACCOUNTS["SELECT...FOR UPDATE<br/>(Alphabetical ID Sort)"]
+        LEDGER_WRITE[Insert LedgerEntry]
+        TX_COMMIT[COMMIT]
+    end
+
+    subgraph DataModel["Data Model Hierarchy"]
+        USER[User]
+        WALLET[Wallet]
+        ACCOUNT[Account]
+        TRANSACTION[Transaction]
+        LEDGER[LedgerEntry]
+    end
+
+    API_REQ --> SIGNUP
+    API_REQ --> LOGIN
+    SIGNUP --> CREATE_WALLET
+    LOGIN --> JWT_MW
+
+    JWT_MW --> BALANCE
+    JWT_MW --> HISTORY
+    JWT_MW --> ADD
+    JWT_MW --> TRANSFER
+    JWT_MW --> WITHDRAW
+    JWT_MW --> REFUND
+
+    ADD --> REDIS_CHECK
+    TRANSFER --> REDIS_CHECK
+    WITHDRAW --> REDIS_CHECK
+    REFUND --> REDIS_CHECK
+
+    REDIS_CHECK -->|Cache Miss| LOCK
+    REDIS_CHECK -->|Cache Hit| CACHE
+    LOCK --> ADD_MONEY
+    LOCK --> TRANSFER_LOGIC
+    LOCK --> WITHDRAW_LOGIC
+    LOCK --> REFUND_LOGIC
+
+    BALANCE --> GET_BALANCE
+    HISTORY --> GET_HISTORY
+
+    CREATE_WALLET --> TX_START
+    ADD_MONEY --> TX_START
+    TRANSFER_LOGIC --> TX_START
+    WITHDRAW_LOGIC --> TX_START
+    REFUND_LOGIC --> TX_START
+
+    TX_START --> LOCK_ACCOUNTS
+    LOCK_ACCOUNTS --> LEDGER_WRITE
+    LEDGER_WRITE --> TX_COMMIT
+    TX_COMMIT --> CACHE
+
+    USER -->|1:1| WALLET
+    WALLET -->|1:N| ACCOUNT
+    ACCOUNT -->|1:N| LEDGER
+    TRANSACTION -->|1:N| LEDGER
+
+    style Auth fill:#e1f5ff
+    style Idempotency fill:#fff4e1
+    style BizLogic fill:#e8f5e9
+    style DB fill:#fce4ec
+    style DataModel fill:#f3e5f5
+```
+
+**Key Components:**
+
+1. **Authentication Layer:** JWT-based auth with auto-wallet creation on signup
+2. **Idempotency Engine:** Redis caching prevents duplicate transactions (24h TTL)
+3. **Business Logic:** LedgerService handles double-entry accounting with row-level locking
+4. **Database:** PostgreSQL ACID transactions with deadlock prevention (alphabetical sorting)
+5. **Data Model:** User → Wallet → Account → Transaction → LedgerEntry hierarchy
 
 ## System Design Notes
 
