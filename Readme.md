@@ -15,10 +15,13 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 - API: Express + Swagger (OpenAPI)
 - Data: PostgreSQL + Prisma ORM
 - Cache: Redis
+- Authentication: JWT + bcryptjs
+- Validation: Zod
 - Testing: Jest
 
 ## Core Engineering Features
 
+* **JWT Authentication:** Secure user authentication with bcrypt password hashing and JWT token-based authorization. Wallets are automatically created on signup.
 * **Double-Entry Transfers:** Balances are never stored directly. Transfers create two immutable `LedgerEntry` rows (a Debit and a Credit). Deposits and withdrawals create a single signed entry.
 * **Concurrency Control (Row-Level Locking):** Uses PostgreSQL `SELECT ... FOR UPDATE` to lock wallet rows for transfers and withdrawals. Deadlocks are avoided by sorting account IDs lexicographically before locking.
 * **Idempotency Engine:** Integrates a Redis caching middleware layer. It checks `Idempotency-Key` headers on state-changing routes to ensure retries do not duplicate processing.
@@ -38,15 +41,30 @@ If any step fails, the entire transaction is rolled back to preserve balance con
 
 ## System Design Notes
 
-1. **Ledger Invariant:** Transfers create equal and opposite entries that net to zero. Deposits and withdrawals use a single signed entry.
-2. **Idempotency Guarantee:** State-changing endpoints (add money, transfer, withdraw, refund) require an `Idempotency-Key`, and successful responses are cached in Redis for 24 hours.
-3. **Consistency Model:** All writes happen inside a single database transaction; transfers and withdrawals use row-level locking to prevent double-spend races.
+1. **Authentication:** Users sign up with email/password (hashed with bcrypt). Login returns a JWT token valid for 24 hours. All wallet operations require Bearer token authentication.
+2. **Account Auto-Creation:** Signup automatically creates a Wallet with one AVAILABLE account. Users receive their accountId on login for immediate use.
+3. **Ledger Invariant:** Transfers create equal and opposite entries that net to zero. Deposits and withdrawals use a single signed entry.
+4. **Idempotency Guarantee:** State-changing endpoints (add money, transfer, withdraw, refund) require an `Idempotency-Key`, and successful responses are cached in Redis for 24 hours.
+5. **Consistency Model:** All writes happen inside a single database transaction; transfers and withdrawals use row-level locking to prevent double-spend races.
 
 ## Data Model (Conceptual)
 
-- `LedgerAccount`: wallet owner/account reference
-- `Transaction`: immutable record representing a money movement
-- `LedgerEntry`: debit/credit row linked to a `Transaction` and `LedgerAccount`
+**Hierarchy:**
+```
+User (1:1) → Wallet (1:many) → Accounts → Ledger Entries
+```
+
+- `User`: Authentication entity with email/password
+- `Wallet`: Container for all user accounts (auto-created on signup)
+- `Account`: Individual ledger accounts (e.g., AVAILABLE, PENDING, RESERVED)
+- `Transaction`: Immutable record representing a money movement
+- `LedgerEntry`: Debit/credit row linked to a `Transaction` and `Account`
+
+**Authentication Flow:**
+1. User signs up → Creates User + Wallet + Account (AVAILABLE type)
+2. Login returns: `{ token, userId, accountId, accountType }`
+3. Use `accountId` for all wallet operations
+4. Include JWT `token` in Authorization header
 
 Balance is derived as: $\text{balance} = \sum \text{credits} - \sum \text{debits}$
 Balance is derived as: $\text{balance} = \sum \text{amount}$
@@ -68,6 +86,9 @@ REDIS_URL="redis://localhost:6379"
 
 # Application Config
 PORT=3000
+
+# Security
+JWT_SECRET="your-secret-key-here"
 ```
 
 ## Getting Started
@@ -99,6 +120,48 @@ npm run dev
 Navigate to the interactive Swagger UI to test endpoints directly from your browser:  
 `http://localhost:3000/api-docs`
 
+## Quick Start Testing
+
+**1. Create an account via Swagger UI:**
+- Navigate to `http://localhost:3000/api-docs`
+- Use `POST /api/auth/signup` with:
+  ```json
+  {
+    "email": "test@example.com",
+    "password": "securepass123",
+    "name": "Test User"
+  }
+  ```
+
+**2. Login to get your credentials:**
+- Use `POST /api/auth/login` with your email/password
+- Response includes:
+  ```json
+  {
+    "token": "eyJhbGci...",
+    "userId": "uuid",
+    "accountId": "uuid",  // Use this for all wallet operations
+    "accountType": "AVAILABLE"
+  }
+  ```
+
+**3. Authorize in Swagger:**
+- Click the "Authorize" button (🔒 icon)
+- Enter: `Bearer <your-token>`
+- Now you can test all authenticated endpoints
+
+**4. Test wallet operations:**
+- Add money: `POST /api/wallets/{accountId}/add-money`
+- Check balance: `GET /api/wallets/{accountId}/balance`
+- Transfer: `POST /api/wallets/{accountId}/transfer`
+
+**Demo Credentials** (if you want to use existing test account):
+```
+Email: user-710490248@test.com
+Password: pass123
+Account ID: 27229a05-71a4-4a7b-8179-e09f241826d0
+```
+
 ## Testing
 
 1. Start Postgres and Redis: `docker-compose up -d`
@@ -112,16 +175,25 @@ Navigate to the interactive Swagger UI to test endpoints directly from your brow
 
 ## API Endpoints Reference
 
-| Method | Endpoint | Description | Idempotency Required? |
+### Authentication
+| Method | Endpoint | Description | Auth Required? |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/wallets/create` | Initializes a new user wallet. | No |
-| `GET` | `/api/wallets/:accountId/balance` | Calculates the real-time balance dynamically. | No |
-| `POST` | `/api/wallets/add-money` | Mints money into a wallet (Credit). | Yes |
-| `POST` | `/api/wallets/transfer` | Safely moves money between two accounts. | Yes |
-| `POST` | `/api/wallets/withdraw` | Debits a user account simulating a cash-out. | Yes |
-| `POST` | `/api/wallets/refund` | Inverts a previous transaction securely. | Yes |
+| `POST` | `/api/auth/signup` | Register new user (auto-creates wallet + AVAILABLE account) | No |
+| `POST` | `/api/auth/login` | Login and receive JWT token + accountId | No |
 
-*Note: State-mutating routes (add money, transfer, withdraw, refund) require an `Idempotency-Key` header to prevent duplicate processing.*
+### Wallet Operations
+| Method | Endpoint | Description | Auth Required? | Idempotency Required? |
+| :--- | :--- | :--- | :---: | :---: |
+| `GET` | `/api/wallets/:accountId/balance` | Get real-time balance | Yes | No |
+| `GET` | `/api/wallets/:accountId/history` | Get transaction history (paginated) | Yes | No |
+| `POST` | `/api/wallets/:accountId/add-money` | Add money to account (Credit) | Yes | Yes |
+| `POST` | `/api/wallets/:accountId/transfer` | Transfer money between accounts | Yes | Yes |
+| `POST` | `/api/wallets/:accountId/withdraw` | Withdraw money (Debit) | Yes | Yes |
+| `POST` | `/api/wallets/refund/:transactionId` | Reverse a transaction | Yes | Yes |
+
+**Authentication:** All wallet endpoints require a valid JWT token in the `Authorization: Bearer <token>` header.
+
+**Idempotency:** State-mutating routes require an `Idempotency-Key` header to prevent duplicate processing.
 
 ## Architecture & Folder Structure 
 
@@ -131,9 +203,17 @@ LedgerPay follows Clean Architecture principles, ensuring a strict separation of
 src/
 ├── config/             # Database and Redis client singletons
 ├── controllers/        # Express route handlers
-├── middlewares/        # Idempotency logic and error handling
+│   ├── auth.controllers.ts    # Signup and login handlers
+│   └── wallet.controller.ts   # Wallet operation handlers
+├── middlewares/        # Authentication, idempotency, and error handling
+│   ├── auth.middleware.ts     # JWT verification
+│   └── idempotency.ts         # Duplicate request prevention
 ├── routes/             # API routing definitions
+│   ├── auth.routes.ts         # Authentication endpoints
+│   └── wallet.routes.ts       # Wallet operation endpoints
 ├── services/           # Core financial business logic and Prisma transactions
+│   └── ledger.service.ts      # Double-entry accounting logic
+├── dtos/               # Request validation schemas (Zod)
 ├── app.ts              # Express application setup and Swagger configuration
 └── server.ts           # Application entry point
 ```
