@@ -16,6 +16,23 @@ export class LedgerService {
         });
     }
 
+    // Get Balance - Calculate from ledger entries
+    static async getBalance(accountId: string) {
+        const balanceCheck = await prisma.ledgerEntry.aggregate({
+            where: { ledgerAccountId: accountId },
+            _sum: { amount: true }
+        });
+        return balanceCheck._sum.amount || new Prisma.Decimal(0);
+    }
+
+    // Get Account with Wallet info (for ownership verification)
+    static async getAccountWithWallet(accountId: string) {
+        return prisma.ledgerAccount.findUnique({
+            where: { id: accountId },
+            include: { wallet: true }
+        });
+    }
+
     // Add Money (Deposit)
     static async addMoney(accountId: string, amount: number, ticketNumber: string) {
         const amountDec = new Prisma.Decimal(amount);
@@ -230,4 +247,30 @@ export class LedgerService {
             return newRefundTx;
         });
     }
+
+    // Fetch Transaction history with pagination
+    static async getTransactionHistory(accountId: string, limit: number = 10, offset: number = 0 ){
+        // Get the actual entries and include the transaction details
+        const entries = await prisma.ledgerEntry.findMany({
+            where: { ledgerAccountId: accountId},
+            include: {
+                transaction: true // This will fetch status, refId nd all from TransactionTable
+            },
+            orderBy: { createdAt: 'desc'}, // Newest transaction first
+            take: limit, 
+            skip: offset
+        });
+        // Getting total count
+        const totalRecords = await prisma.ledgerEntry.count({
+            where: { ledgerAccountId: accountId }
+        });
+
+        return {
+            totalRecords,
+            limit,
+            offset,
+            data: entries
+        };
+    }
+
 }

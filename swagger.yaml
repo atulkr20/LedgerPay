@@ -5,27 +5,117 @@ info:
   description: A production-grade FinTech wallet backend using double-entry accounting, row-level locking, and idempotency.
 servers:
   - url: http://localhost:3000
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
 paths:
-  /api/wallets/create:
+  /api/auth/signup:
     post:
-      summary: Create a new wallet
-      description: Initializes a user wallet with an 'AVAILABLE' ledger account.
+      summary: User Signup
+      description: Register a new user with email and password. Automatically creates a wallet with an AVAILABLE account - no additional setup needed!
+      tags:
+        - Authentication
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - email
+                - password
               properties:
-                userId: { type: string, example: "user-123" }
+                email:
+                  type: string
+                  format: email
+                  example: "john@test.com"
+                password:
+                  type: string
+                  minLength: 6
+                  example: "password123"
+                name:
+                  type: string
+                  example: "John Doe"
       responses:
         '201':
-          description: Wallet created successfully
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "User created"
+                  userId:
+                    type: string
+                    example: "ce0e05ee-bdae-45f9-842f-c3e8d6c2b814"
+        '400':
+          description: User already exists or validation error
+
+  /api/auth/login:
+    post:
+      summary: User Login
+      description: Authenticate with email and password. Returns JWT token, userId, walletId, and accountId (ready to use for transactions immediately!).
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "john@test.com"
+                password:
+                  type: string
+                  example: "password123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    description: JWT token valid for 24 hours
+                  userId:
+                    type: string
+                    example: "ce0e05ee-bdae-45f9-842f-c3e8d6c2b814"
+                  accountId:
+                    type: string
+                    example: "27229a05-71a4-4a7b-8179-e09f241826d0"
+                    description: Default AVAILABLE account ID (use for transactions)
+                  accountType:
+                    type: string
+                    example: "AVAILABLE"
+                    description: Type of this ledger account
+        '401':
+          description: Invalid credentials
 
   /api/wallets/{accountId}/balance:
     get:
       summary: Get Wallet Balance
       description: Calculates real-time balance dynamically by summing all ledger entries.
+      tags:
+        - Wallets
+      security:
+        - BearerAuth: []
       parameters:
         - in: path
           name: accountId
@@ -36,91 +126,245 @@ paths:
       responses:
         '200':
           description: Balance retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  balance:
+                    type: string
+                    example: "1500.0000"
+        '401':
+          description: Unauthorized
+
+  /api/wallets/{accountId}/history:
+    get:
+      summary: Get Transaction History
+      description: Retrieve paginated transaction history for an account. Returns all ledger entries with full transaction details.
+      tags:
+        - Wallets
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema:
+            type: string
+          description: The Ledger Account ID
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Number of records per page
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+          description: Offset for pagination
+      responses:
+        '200':
+          description: Transaction history retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  totalRecords:
+                    type: integer
+                    example: 25
+                  limit:
+                    type: integer
+                    example: 10
+                  offset:
+                    type: integer
+                    example: 0
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Account doesn't belong to user
 
   /api/wallets/add-money:
     post:
       summary: Deposit Money
       description: Mints money into a wallet using double-entry accounting.
+      tags:
+        - Money Operations
+      security:
+        - BearerAuth: []
       parameters:
         - in: header
           name: Idempotency-Key
           schema: { type: string, example: "deposit-ticket-001" }
           required: true
+          description: Unique key to prevent duplicate deposits
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - accountId
+                - amount
               properties:
-                accountId: { type: string, example: "your-account-id" }
-                amount: { type: number, example: 500 }
+                accountId: 
+                  type: string
+                  example: "your-account-id"
+                amount: 
+                  type: number
+                  example: 500
+                  minimum: 0.0001
       responses:
         '200':
           description: Money added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  transaction:
+                    type: object
+        '400':
+          description: Missing idempotency key or validation error
+        '401':
+          description: Unauthorized
 
   /api/wallets/transfer:
     post:
       summary: Transfer Funds
-      description: Safely moves money between two accounts. Uses SELECT ... FOR UPDATE to prevent race conditions.
+      description: Safely moves money between two accounts. Uses SELECT ... FOR UPDATE to prevent race conditions and deadlocks.
+      tags:
+        - Money Operations
+      security:
+        - BearerAuth: []
       parameters:
         - in: header
           name: Idempotency-Key
           schema: { type: string, example: "transfer-ticket-001" }
           required: true
+          description: Unique key to prevent duplicate transfers
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - fromAccountId
+                - toAccountId
+                - amount
               properties:
-                fromAccountId: { type: string }
-                toAccountId: { type: string }
-                amount: { type: number, example: 50 }
+                fromAccountId: 
+                  type: string
+                  description: Sender's account ID
+                toAccountId: 
+                  type: string
+                  description: Receiver's account ID
+                amount: 
+                  type: number
+                  example: 50
+                  minimum: 0.0001
       responses:
         '200':
           description: Transfer successful
+        '400':
+          description: Validation error (e.g., same account transfer)
+        '401':
+          description: Unauthorized
+        '422':
+          description: Insufficient funds
 
   /api/wallets/withdraw:
     post:
       summary: Withdraw Funds
       description: Debits the user's account to simulate a cash-out to a bank.
+      tags:
+        - Money Operations
+      security:
+        - BearerAuth: []
       parameters:
         - in: header
           name: Idempotency-Key
           schema: { type: string, example: "withdraw-ticket-001" }
           required: true
+          description: Unique key to prevent duplicate withdrawals
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - accountId
+                - amount
               properties:
-                accountId: { type: string }
-                amount: { type: number, example: 25 }
+                accountId: 
+                  type: string
+                amount: 
+                  type: number
+                  example: 25
+                  minimum: 0.0001
       responses:
         '200':
           description: Withdrawal successful
+        '400':
+          description: Missing idempotency key or validation error
+        '401':
+          description: Unauthorized
+        '422':
+          description: Insufficient funds
 
   /api/wallets/refund:
     post:
       summary: Refund a Transaction
-      description: Never deletes data. Creates a new transaction with inverted ledger entries (Debits become Credits).
+      description: Never deletes data. Creates a new transaction with inverted ledger entries (Debits become Credits). Marks original transaction as REVERSED.
+      tags:
+        - Money Operations
+      security:
+        - BearerAuth: []
       parameters:
         - in: header
           name: Idempotency-Key
           schema: { type: string, example: "refund-ticket-001" }
           required: true
+          description: Unique key to prevent duplicate refunds
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - originalTransactionId
               properties:
-                originalTransactionId: { type: string, example: "paste-transaction-id-here" }
+                originalTransactionId: 
+                  type: string
+                  format: uuid
+                  example: "paste-transaction-id-here"
+                  description: The transaction ID to refund
       responses:
         '200':
-          description: Refund processed
+          description: Refund processed successfully
+        '400':
+          description: Missing idempotency key
+        '401':
+          description: Unauthorized
+        '404':
+          description: Transaction not found
+        '409':
+          description: Transaction already refunded

@@ -19,7 +19,11 @@ export const signup = async (req: Request, res: Response) => {
                 name,
                 passwordHash,
                 wallet: {
-                    create: {}
+                    create: {
+                        accounts: {
+                            create: [{ type: 'AVAILABLE' }]
+                        }
+                    }
                 }
             }
         });
@@ -33,7 +37,15 @@ export const login = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
 
-        const user = await prisma.user.findUnique({ where: { email }});
+        const user = await prisma.user.findUnique({ 
+            where: { email },
+            include: { 
+                wallet: {
+                    include: { accounts: { select: { id: true, type: true }, take: 1 } }
+                }
+            }
+        });
+        
         if(!user || !(await bcrypt.compare(password, user.passwordHash))) {
             return res.status(401).json({ error: "Invalid credentials"});
         } 
@@ -44,7 +56,14 @@ export const login = async (req: Request, res: Response) => {
             process.env.JWT_SECRET as string,
             { expiresIn: '1d' }
         );
-        res.status(200).json({ token, userId: user.id });
+        
+        // Return user info with account details
+        res.status(200).json({ 
+            token, 
+            userId: user.id,
+            accountId: user.wallet?.accounts[0]?.id,
+            accountType: user.wallet?.accounts[0]?.type || 'AVAILABLE'
+        });
     } catch (error) {
         res.status(500).json({ error: "Internal server error"})
     }

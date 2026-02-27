@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { redis } from '../config/redis';
-import { PrismaClient } from '@prisma/Client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/db';
 
 export const idempotency = async (req: Request, res: Response, next: NextFunction) => {
     if(req.method === 'GET') return next();
