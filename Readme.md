@@ -32,113 +32,88 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 ```mermaid
 graph TB
-    subgraph Client["Client / API Consumer"]
-        API_REQ[HTTP Request]
-    end
-
+    Client["🌐 Client / API Consumer"]
+    
     subgraph Auth["Authentication Layer"]
-        SIGNUP[POST /auth/signup]
-        LOGIN[POST /auth/login]
-        JWT_MW[JWT Middleware]
+        Signup["POST /auth/signup<br/>(Create User + Wallet)"]
+        Login["POST /auth/login<br/>(Get JWT Token)"]
     end
-
-    subgraph WalletOps["Wallet Operations Layer"]
-        BALANCE[GET /balance]
-        HISTORY[GET /history]
-        ADD[POST /add-money 🔑]
-        TRANSFER[POST /transfer 🔑]
-        WITHDRAW[POST /withdraw 🔑]
-        REFUND[POST /refund 🔑]
+    
+    subgraph Protected["Protected Endpoints (JWT Required)"]
+        Balance["GET /balance"]
+        History["GET /history"]
+        AddMoney["POST /add-money 🔑"]
+        Transfer["POST /transfer 🔑"]
+        Withdraw["POST /withdraw 🔑"]
+        Refund["POST /refund 🔑"]
     end
-
-    subgraph Idempotency["Idempotency Engine"]
-        REDIS_CHECK{Redis Cache Check}
-        LOCK[10s Processing Lock]
-        CACHE[24h Result Cache]
+    
+    subgraph Idempotent["Idempotency Layer"]
+        RedisCheck{"Redis Cache<br/>Check?"}
+        ProcessLock["10s Lock"]
+        CacheTTL["24h Cache"]
     end
-
-    subgraph BizLogic["Business Logic - LedgerService"]
-        CREATE_WALLET[createWallet]
-        GET_BALANCE[getBalance]
-        ADD_MONEY[addMoney]
-        TRANSFER_LOGIC[transfer - Row Lock]
-        WITHDRAW_LOGIC[withdraw - Row Lock]
-        REFUND_LOGIC[refund]
-        GET_HISTORY[getTransactionHistory]
+    
+    subgraph Business["Business Logic - LedgerService"]
+        CreateWallet["createWallet()"]
+        GetBalance["getBalance()"]
+        AddMoneyLogic["addMoney()"]
+        TransferLogic["transfer()<br/>+ Row Lock"]
+        WithdrawLogic["withdraw()<br/>+ Row Lock"]
+        RefundLogic["refund()"]
     end
-
-    subgraph DB["Database - PostgreSQL"]
-        TX_START[BEGIN TRANSACTION]
-        LOCK_ACCOUNTS["SELECT...FOR UPDATE<br/>(Alphabetical ID Sort)"]
-        LEDGER_WRITE[Insert LedgerEntry]
-        TX_COMMIT[COMMIT]
+    
+    subgraph Database["PostgreSQL ACID Transaction"]
+        SelectForUpdate["SELECT...FOR UPDATE<br/>(Alphabetical Sort)"]
+        InsertLedger["Insert LedgerEntry<br/>(Debit/Credit)"]
+        Commit["COMMIT"]
     end
-
-    subgraph DataModel["Data Model Hierarchy"]
-        USER[User]
-        WALLET[Wallet]
-        ACCOUNT[Account]
-        TRANSACTION[Transaction]
-        LEDGER[LedgerEntry]
-    end
-
-    API_REQ --> SIGNUP
-    API_REQ --> LOGIN
-    SIGNUP --> CREATE_WALLET
-    LOGIN --> JWT_MW
-
-    JWT_MW --> BALANCE
-    JWT_MW --> HISTORY
-    JWT_MW --> ADD
-    JWT_MW --> TRANSFER
-    JWT_MW --> WITHDRAW
-    JWT_MW --> REFUND
-
-    ADD --> REDIS_CHECK
-    TRANSFER --> REDIS_CHECK
-    WITHDRAW --> REDIS_CHECK
-    REFUND --> REDIS_CHECK
-
-    REDIS_CHECK -->|Cache Miss| LOCK
-    REDIS_CHECK -->|Cache Hit| CACHE
-    LOCK --> ADD_MONEY
-    LOCK --> TRANSFER_LOGIC
-    LOCK --> WITHDRAW_LOGIC
-    LOCK --> REFUND_LOGIC
-
-    BALANCE --> GET_BALANCE
-    HISTORY --> GET_HISTORY
-
-    CREATE_WALLET --> TX_START
-    ADD_MONEY --> TX_START
-    TRANSFER_LOGIC --> TX_START
-    WITHDRAW_LOGIC --> TX_START
-    REFUND_LOGIC --> TX_START
-
-    TX_START --> LOCK_ACCOUNTS
-    LOCK_ACCOUNTS --> LEDGER_WRITE
-    LEDGER_WRITE --> TX_COMMIT
-    TX_COMMIT --> CACHE
-
-    USER -->|1:1| WALLET
-    WALLET -->|1:N| ACCOUNT
-    ACCOUNT -->|1:N| LEDGER
-    TRANSACTION -->|1:N| LEDGER
-
-    style Auth fill:#e1f5ff
-    style Idempotency fill:#fff4e1
-    style BizLogic fill:#e8f5e9
-    style DB fill:#fce4ec
-    style DataModel fill:#f3e5f5
+    
+    Client -->|signup/login| Auth
+    Client -->|with JWT| Protected
+    
+    Signup --> CreateWallet
+    Login --> GetBalance
+    
+    Balance --> GetBalance
+    History --> CreateWallet
+    
+    AddMoney --> RedisCheck
+    Transfer --> RedisCheck
+    Withdraw --> RedisCheck
+    Refund --> RedisCheck
+    
+    RedisCheck -->|Hit| CacheTTL
+    RedisCheck -->|Miss| ProcessLock
+    
+    ProcessLock --> AddMoneyLogic
+    ProcessLock --> TransferLogic
+    ProcessLock --> WithdrawLogic
+    ProcessLock --> RefundLogic
+    
+    CreateWallet --> SelectForUpdate
+    AddMoneyLogic --> SelectForUpdate
+    TransferLogic --> SelectForUpdate
+    WithdrawLogic --> SelectForUpdate
+    RefundLogic --> SelectForUpdate
+    
+    SelectForUpdate --> InsertLedger
+    InsertLedger --> Commit
+    Commit --> CacheTTL
+    
+    style Auth fill:#e0f2fe
+    style Protected fill:#dcfce7
+    style Idempotent fill:#fef3c7
+    style Business fill:#fce7f3
+    style Database fill:#f0e7fe
 ```
 
-**Key Components:**
-
-1. **Authentication Layer:** JWT-based auth with auto-wallet creation on signup
-2. **Idempotency Engine:** Redis caching prevents duplicate transactions (24h TTL)
-3. **Business Logic:** LedgerService handles double-entry accounting with row-level locking
-4. **Database:** PostgreSQL ACID transactions with deadlock prevention (alphabetical sorting)
-5. **Data Model:** User → Wallet → Account → Transaction → LedgerEntry hierarchy
+**Key Architecture Points:**
+- **JWT Auth:** Signup creates User + Wallet + AVAILABLE account automatically
+- **Idempotency:** Redis caching prevents duplicate transactions (24h TTL + 10s lock))
+- **Row Locking:** Sorted IDs prevent deadlocks during concurrent transfers/withdrawals
+- **ACID Compliance:** All money movements wrapped in database transactions
+- **Double-Entry:** Transfer/refund create equal & opposite ledger entries
 
 ## System Design Notes
 
