@@ -5,6 +5,7 @@ import YAML from 'yamljs';
 import path from 'path';
 
 import { walletRoutes } from './routes/wallet.routes';
+import { authRoutes } from './routes/auth.routes';
 
 export const app = express();
 
@@ -31,5 +32,5 @@ app.use(
   swaggerUi.setup(undefined, swaggerUiOptions),
 );
 
-
+app.use('/api/auth', authRoutes);
 app.use('/api/wallets', walletRoutes);

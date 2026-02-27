@@ -6,10 +6,23 @@ datasource db {
   provider = "postgresql"
 }
 
+// -----------------------------------------------------------------------------
+// NEW: User Table for Authentication (JWT)
+// -----------------------------------------------------------------------------
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  wallet       Wallet?  // 1-to-1 relationship with Wallet
+  createdAt    DateTime @default(now())
+}
+
 // 1. A Wallet belongs to a User
 model Wallet {
   id        String          @id @default(uuid())
   userId    String          @unique
+  user      User            @relation(fields: [userId], references: [id]) // Connected to User
   accounts  LedgerAccount[]
   createdAt DateTime        @default(now())
 }
@@ -45,4 +58,19 @@ model LedgerEntry {
   entryType       String        // DEBIT or CREDIT
   amount          Decimal       @db.Decimal(20, 4) 
   createdAt       DateTime      @default(now())
+
+  // PERFORMANCE UPGRADE: Indexes banaye hain taaki balance queries lightning fast hon
+  @@index([ledgerAccountId]) 
+  @@index([transactionId])
+}
+
+// -----------------------------------------------------------------------------
+// NEW: DB-Backed Idempotency Table (Bulletproof against double spending)
+// -----------------------------------------------------------------------------
+model IdempotencyKey {
+  key            String   @id
+  responseStatus Int?     // Saves the HTTP status (e.g., 200, 400)
+  responseBody   Json?    // Saves the exact JSON response sent to the user
+  lockedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
 }

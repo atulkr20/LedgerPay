@@ -41,3 +41,14 @@ export const TransferSchema = z.object({
 export const RefundSchema = z.object({
     originalTransactionId: z.string().uuid("Must be a valid UUID"),
 });
+
+export const SignupSchema = z.object({
+    email: z.string().email("Invalid email format"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    name: z.string().optional(),
+});
+
+export const LoginSchema = z.object({
+    email: z.string().email("Invalid email format"),
+    password: z.string().min(1, "Password is required"),
+});
