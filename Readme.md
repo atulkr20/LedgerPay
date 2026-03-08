@@ -17,7 +17,6 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 - Cache: Redis
 - Authentication: JWT + bcryptjs
 - Validation: Zod
-- Testing: Jest
 
 ## Core Engineering Features
 
@@ -30,90 +29,17 @@ LedgerPay is a high-performance FinTech backend designed to handle digital walle
 
 ## System Architecture
 
-```mermaid
-graph TB
-    Client["🌐 Client / API Consumer"]
-    
-    subgraph Auth["Authentication Layer"]
-        Signup["POST /auth/signup<br/>(Create User + Wallet)"]
-        Login["POST /auth/login<br/>(Get JWT Token)"]
-    end
-    
-    subgraph Protected["Protected Endpoints (JWT Required)"]
-        Balance["GET /balance"]
-        History["GET /history"]
-        AddMoney["POST /add-money 🔑"]
-        Transfer["POST /transfer 🔑"]
-        Withdraw["POST /withdraw 🔑"]
-        Refund["POST /refund 🔑"]
-    end
-    
-    subgraph Idempotent["Idempotency Layer"]
-        RedisCheck{"Redis Cache<br/>Check?"}
-        ProcessLock["10s Lock"]
-        CacheTTL["24h Cache"]
-    end
-    
-    subgraph Business["Business Logic - LedgerService"]
-        CreateWallet["createWallet()"]
-        GetBalance["getBalance()"]
-        AddMoneyLogic["addMoney()"]
-        TransferLogic["transfer()<br/>+ Row Lock"]
-        WithdrawLogic["withdraw()<br/>+ Row Lock"]
-        RefundLogic["refund()"]
-    end
-    
-    subgraph Database["PostgreSQL ACID Transaction"]
-        SelectForUpdate["SELECT...FOR UPDATE<br/>(Alphabetical Sort)"]
-        InsertLedger["Insert LedgerEntry<br/>(Debit/Credit)"]
-        Commit["COMMIT"]
-    end
-    
-    Client -->|signup/login| Auth
-    Client -->|with JWT| Protected
-    
-    Signup --> CreateWallet
-    Login --> GetBalance
-    
-    Balance --> GetBalance
-    History --> CreateWallet
-    
-    AddMoney --> RedisCheck
-    Transfer --> RedisCheck
-    Withdraw --> RedisCheck
-    Refund --> RedisCheck
-    
-    RedisCheck -->|Hit| CacheTTL
-    RedisCheck -->|Miss| ProcessLock
-    
-    ProcessLock --> AddMoneyLogic
-    ProcessLock --> TransferLogic
-    ProcessLock --> WithdrawLogic
-    ProcessLock --> RefundLogic
-    
-    CreateWallet --> SelectForUpdate
-    AddMoneyLogic --> SelectForUpdate
-    TransferLogic --> SelectForUpdate
-    WithdrawLogic --> SelectForUpdate
-    RefundLogic --> SelectForUpdate
-    
-    SelectForUpdate --> InsertLedger
-    InsertLedger --> Commit
-    Commit --> CacheTTL
-    
-    style Auth fill:#e0f2fe
-    style Protected fill:#dcfce7
-    style Idempotent fill:#fef3c7
-    style Business fill:#fce7f3
-    style Database fill:#f0e7fe
-```
+**Architecture Diagram:**
 
-**Key Architecture Points:**
-- **JWT Auth:** Signup creates User + Wallet + AVAILABLE account automatically
-- **Idempotency:** Redis caching prevents duplicate transactions (24h TTL + 10s lock))
-- **Row Locking:** Sorted IDs prevent deadlocks during concurrent transfers/withdrawals
-- **ACID Compliance:** All money movements wrapped in database transactions
-- **Double-Entry:** Transfer/refund create equal & opposite ledger entries
+![LedgerPay Transfer Flow Architecture](./Ledgerpay%20transfer%20flow%20architecture.png)
+
+**Key Architecture Components:**
+1. **Authentication Layer:** JWT-based auth with auto-wallet creation on signup
+2. **Protected Endpoints:** All wallet operations require Bearer token authentication
+3. **Idempotency Engine:** Redis caching prevents duplicate transactions (24h TTL + 10s lock)
+4. **Business Logic:** LedgerService handles double-entry accounting with row-level locking
+5. **Database:** PostgreSQL ACID transactions with deadlock prevention (alphabetical ID sorting)
+6. **Data Model:** User → Wallet → Account → Transaction → LedgerEntry hierarchy
 
 ## System Design Notes
 
@@ -238,17 +164,6 @@ Password: pass123
 Account ID: 27229a05-71a4-4a7b-8179-e09f241826d0
 ```
 
-## Testing
-
-1. Start Postgres and Redis: `docker-compose up -d`
-2. Run tests: `npm test`
-
-## Test Strategy
-
-1. **Validation tests**: ensure invalid inputs are rejected early (Zod + middleware).
-2. **Integration tests**: run against real Postgres + Redis to verify transactions and idempotency.
-3. **Critical paths**: create wallet, add money, transfer, refund.
-
 ## API Endpoints Reference
 
 ### Authentication
@@ -303,4 +218,3 @@ src/
 ## Scripts
 
 - `npm run dev` - start development server
-- `npm test` - run test suite
