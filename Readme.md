@@ -1,220 +1,215 @@
-# LedgerPay: Production-Grade Digital Wallet
+# LedgerPay
 
-![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
-![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+A production-grade FinTech backend for digital wallet transactions. Instead of storing fragile balance columns prone to race conditions, LedgerPay calculates balances dynamically using a true **Double-Entry Accounting Ledger** — the same model used by real financial platforms.
 
-LedgerPay is a high-performance FinTech backend designed to handle digital wallet transactions securely. Instead of storing fragile "balance" columns that are prone to race conditions, it calculates balances dynamically using a true **Double-Entry Accounting Ledger**. This mirrors the architecture used by financial platforms that rely on strong financial invariants and auditability.
+---
+
+## Architecture Diagram
+```
+                         Client Request
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │   JWT Auth Middleware │  ← Verify Bearer token
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │ Idempotency Middleware│  ← Check Idempotency-Key in Redis
+                   └──────────┬───────────┘
+                              │
+               ┌──────────────┴──────────────┐
+               │ Cache Hit                   │ Cache Miss
+               ▼                             ▼
+      Return cached                 ┌─────────────────┐
+      response (no DB hit)          │  LedgerService  │
+                                    └────────┬────────┘
+                                             │
+                              ┌──────────────┼──────────────┐
+                              ▼              ▼              ▼
+                         addMoney()     transfer()     withdraw()
+                                            │
+                                            ▼
+                              ┌─────────────────────────┐
+                              │  PostgreSQL Transaction  │
+                              │  (ACID)                  │
+                              │                          │
+                              │  SELECT ... FOR UPDATE   │  ← Row-level lock
+                              │  (sort IDs to avoid      │    (deadlock prevention)
+                              │   deadlocks)             │
+                              │                          │
+                              │  INSERT LedgerEntry      │  ← Debit + Credit rows
+                              │  INSERT Transaction      │
+                              │                          │
+                              │  COMMIT                  │
+                              └─────────────┬────────────┘
+                                            │
+                              ┌─────────────┴────────────┐
+                              │                          │
+                              ▼                          ▼
+                     Cache response                Return response
+                     in Redis (24h TTL)            to client
+```
+
+---
+
+## What Problem It Solves
+
+| Problem | How LedgerPay Solves It |
+|---|---|
+| Race conditions on balance column | No balance column — derived from ledger entries |
+| Duplicate transactions on retry | Idempotency-Key checked in Redis before processing |
+| Concurrent transfer conflicts | Row-level locking with sorted IDs to prevent deadlocks |
+| Partial failure mid-transfer | Full ACID transaction — rolls back on any failure |
+| No audit trail | Every money movement creates immutable ledger entries |
+
+---
 
 ## Tech Stack
 
-- Runtime: Node.js (TypeScript)
-- API: Express + Swagger (OpenAPI)
-- Data: PostgreSQL + Prisma ORM
-- Cache: Redis
-- Authentication: JWT + bcryptjs
-- Validation: Zod
+| Technology | Usage |
+|---|---|
+| Node.js + TypeScript | Core server, type-safe services |
+| Express.js | HTTP server, middleware chain, REST API |
+| PostgreSQL | Wallets, accounts, transactions, ledger entries |
+| Prisma ORM | Type-safe DB access, transactions, migrations |
+| Redis | Idempotency cache (24h TTL), 10s processing lock |
+| JWT + bcryptjs | Auth — password hashing + token-based auth |
+| Zod | Request validation |
+| Jest | Integration + unit tests |
+| Docker | Local PostgreSQL + Redis setup |
 
-## Core Engineering Features
+---
 
-* **JWT Authentication:** Secure user authentication with bcrypt password hashing and JWT token-based authorization. Wallets are automatically created on signup.
-* **Double-Entry Transfers:** Balances are never stored directly. Transfers create two immutable `LedgerEntry` rows (a Debit and a Credit). Deposits and withdrawals create a single signed entry.
-* **Concurrency Control (Row-Level Locking):** Uses PostgreSQL `SELECT ... FOR UPDATE` to lock wallet rows for transfers and withdrawals. Deadlocks are avoided by sorting account IDs lexicographically before locking.
-* **Idempotency Engine:** Integrates a Redis caching middleware layer. It checks `Idempotency-Key` headers on state-changing routes to ensure retries do not duplicate processing.
-* **Financial Immutability:** Transactions are never deleted. Refunds are handled by creating a new transaction with inverse ledger entries and marking the original transaction as reversed.
-* **ACID Compliance:** All money movements are wrapped in `prisma.$transaction`. If a process fails mid-execution, the entire operation safely rolls back.
+## Core Features
 
-## System Architecture
+### Double-Entry Accounting
+Balances are never stored directly. Every money movement creates immutable `LedgerEntry` rows:
+- Transfer → 1 Debit entry + 1 Credit entry (net to zero)
+- Deposit → 1 signed Credit entry
+- Withdrawal → 1 signed Debit entry
 
-**Architecture Diagram:**
-
-![LedgerPay Transfer Flow Architecture](./Ledgerpay%20transfer%20flow%20architecture.png)
-
-**Key Architecture Components:**
-1. **Authentication Layer:** JWT-based auth with auto-wallet creation on signup
-2. **Protected Endpoints:** All wallet operations require Bearer token authentication
-3. **Idempotency Engine:** Redis caching prevents duplicate transactions (24h TTL + 10s lock)
-4. **Business Logic:** LedgerService handles double-entry accounting with row-level locking
-5. **Database:** PostgreSQL ACID transactions with deadlock prevention (alphabetical ID sorting)
-6. **Data Model:** User → Wallet → Account → Transaction → LedgerEntry hierarchy
-
-## System Design Notes
-
-1. **Authentication:** Users sign up with email/password (hashed with bcrypt). Login returns a JWT token valid for 24 hours. All wallet operations require Bearer token authentication.
-2. **Account Auto-Creation:** Signup automatically creates a Wallet with one AVAILABLE account. Users receive their accountId on login for immediate use.
-3. **Ledger Invariant:** Transfers create equal and opposite entries that net to zero. Deposits and withdrawals use a single signed entry.
-4. **Idempotency Guarantee:** State-changing endpoints (add money, transfer, withdraw, refund) require an `Idempotency-Key`, and successful responses are cached in Redis for 24 hours.
-5. **Consistency Model:** All writes happen inside a single database transaction; transfers and withdrawals use row-level locking to prevent double-spend races.
-
-## Data Model (Conceptual)
-
-**Hierarchy:**
+Balance is always derived as:
 ```
-User (1:1) → Wallet (1:many) → Accounts → Ledger Entries
+balance = SUM(credits) - SUM(debits)
 ```
 
-- `User`: Authentication entity with email/password
-- `Wallet`: Container for all user accounts (auto-created on signup)
-- `Account`: Individual ledger accounts (e.g., AVAILABLE, PENDING, RESERVED)
-- `Transaction`: Immutable record representing a money movement
-- `LedgerEntry`: Debit/credit row linked to a `Transaction` and `Account`
+### Concurrency Control — Row-Level Locking
+Uses PostgreSQL `SELECT ... FOR UPDATE` to lock wallet rows during transfers and withdrawals. Account IDs are sorted lexicographically before acquiring locks — this prevents deadlocks when two transfers happen simultaneously between the same accounts.
 
-**Authentication Flow:**
-1. User signs up → Creates User + Wallet + Account (AVAILABLE type)
-2. Login returns: `{ token, userId, accountId, accountType }`
-3. Use `accountId` for all wallet operations
-4. Include JWT `token` in Authorization header
+### Idempotency Engine
+State-changing endpoints require an `Idempotency-Key` header. On every request:
+1. Check Redis for the key
+2. If found → return cached response (no DB hit)
+3. If not found → set a 10s processing lock → execute → cache result for 24h
 
-Balance is derived as: $\text{balance} = \sum \text{credits} - \sum \text{debits}$
-Balance is derived as: $\text{balance} = \sum \text{amount}$
+This prevents duplicate transactions on network retries.
 
-## Prerequisites
+### ACID Compliance
+All money movements are wrapped in `prisma.$transaction`. If any step fails mid-execution, the entire operation rolls back — no partial transfers, no ghost debits.
 
-Before you begin, ensure you have the following installed:
-* [Node.js](https://nodejs.org/) (v18 or higher)
-* [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for PostgreSQL and Redis containers)
+### Financial Immutability
+Transactions are never deleted or edited. Refunds create a new transaction with inverse ledger entries and mark the original as reversed.
+
+---
+
+## Data Model
+```
+User (1:1) → Wallet (1:many) → Accounts → LedgerEntries
+                                    │
+                                    └──→ Transactions
+```
+
+- `User` — authentication entity (email + hashed password)
+- `Wallet` — container for all accounts, auto-created on signup
+- `Account` — individual ledger account (AVAILABLE, PENDING, RESERVED)
+- `Transaction` — immutable record of a money movement
+- `LedgerEntry` — debit/credit row linked to a Transaction and Account
+
+---
+
+## API Endpoints
+
+### Authentication
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| POST | `/api/auth/signup` | Register user — auto-creates wallet + AVAILABLE account | No |
+| POST | `/api/auth/login` | Login — returns JWT + accountId | No |
+
+### Wallet Operations
+| Method | Endpoint | Description | Auth | Idempotency |
+|---|---|---|---|---|
+| GET | `/api/wallets/:accountId/balance` | Get real-time balance | Yes | No |
+| GET | `/api/wallets/:accountId/history` | Get transaction history (paginated) | Yes | No |
+| POST | `/api/wallets/:accountId/add-money` | Deposit money | Yes | Yes |
+| POST | `/api/wallets/:accountId/transfer` | Transfer between accounts | Yes | Yes |
+| POST | `/api/wallets/:accountId/withdraw` | Withdraw money | Yes | Yes |
+| POST | `/api/wallets/refund/:transactionId` | Reverse a transaction | Yes | Yes |
+
+---
+
+## Folder Structure
+```
+src/
+├── config/               # DB and Redis client singletons
+├── controllers/
+│   ├── auth.controllers.ts
+│   └── wallet.controller.ts
+├── middlewares/
+│   ├── auth.middleware.ts       # JWT verification
+│   └── idempotency.ts           # Duplicate request prevention
+├── routes/
+│   ├── auth.routes.ts
+│   └── wallet.routes.ts
+├── services/
+│   └── ledger.service.ts        # Core double-entry logic
+├── dtos/                        # Zod validation schemas
+├── app.ts
+└── server.ts
+```
+
+---
 
 ## Environment Variables
-
-Create a `.env` file in the root directory and configure the following:
-
 ```env
-# Database Connections
 DATABASE_URL="postgresql://postgres:password@localhost:5433/wallet_db?schema=public"
 REDIS_URL="redis://localhost:6379"
-
-# Application Config
 PORT=3000
-
-# Security
 JWT_SECRET="your-secret-key-here"
 ```
 
-## Getting Started
+---
 
-**1. Clone the repository & install dependencies:**
+## Running Locally
 ```bash
-git clone [https://github.com/yourusername/ledgerpay.git](https://github.com/yourusername/ledgerpay.git)
-cd ledgerpay
+# 1. Install dependencies
 npm install
-```
 
-**2. Start the infrastructure (PostgreSQL & Redis):**
-```bash
+# 2. Start PostgreSQL + Redis
 docker-compose up -d
-```
 
-**3. Set up the database schema:**
-```bash
+# 3. Run migrations
 npx prisma db push
 npx prisma generate
-```
 
-**4. Start the development server:**
-```bash
+# 4. Start the server
 npm run dev
+
+# 5. Open Swagger docs
+http://localhost:3000/api-docs
 ```
 
-**5. Explore the API:**
-Navigate to the interactive Swagger UI to test endpoints directly from your browser:  
-`http://localhost:3000/api-docs`
+---
 
-## Quick Start Testing
-
-**1. Create an account via Swagger UI:**
-- Navigate to `http://localhost:3000/api-docs`
-- Use `POST /api/auth/signup` with:
-  ```json
-  {
-    "email": "test@example.com",
-    "password": "securepass123",
-    "name": "Test User"
-  }
-  ```
-
-**2. Login to get your credentials:**
-- Use `POST /api/auth/login` with your email/password
-- Response includes:
-  ```json
-  {
-    "token": "eyJhbGci...",
-    "userId": "uuid",
-    "accountId": "uuid",  // Use this for all wallet operations
-    "accountType": "AVAILABLE"
-  }
-  ```
-
-**3. Authorize in Swagger:**
-- Click the "Authorize" button (🔒 icon)
-- Enter: `Bearer <your-token>`
-- Now you can test all authenticated endpoints
-
-**4. Test wallet operations:**
-- Add money: `POST /api/wallets/{accountId}/add-money`
-- Check balance: `GET /api/wallets/{accountId}/balance`
-- Transfer: `POST /api/wallets/{accountId}/transfer`
-
-**Demo Credentials** (if you want to use existing test account):
-```
-Email: user-710490248@test.com
-Password: pass123
-Account ID: 27229a05-71a4-4a7b-8179-e09f241826d0
+## Testing
+```bash
+npm test
 ```
 
-## API Endpoints Reference
+Test strategy:
+- Validation tests — invalid inputs rejected early via Zod
+- Integration tests — run against real PostgreSQL + Redis
+- Critical paths — create wallet, add money, transfer, refund
 
-### Authentication
-| Method | Endpoint | Description | Auth Required? |
-| :--- | :--- | :--- | :---: |
-| `POST` | `/api/auth/signup` | Register new user (auto-creates wallet + AVAILABLE account) | No |
-| `POST` | `/api/auth/login` | Login and receive JWT token + accountId | No |
+---
 
-### Wallet Operations
-| Method | Endpoint | Description | Auth Required? | Idempotency Required? |
-| :--- | :--- | :--- | :---: | :---: |
-| `GET` | `/api/wallets/:accountId/balance` | Get real-time balance | Yes | No |
-| `GET` | `/api/wallets/:accountId/history` | Get transaction history (paginated) | Yes | No |
-| `POST` | `/api/wallets/:accountId/add-money` | Add money to account (Credit) | Yes | Yes |
-| `POST` | `/api/wallets/:accountId/transfer` | Transfer money between accounts | Yes | Yes |
-| `POST` | `/api/wallets/:accountId/withdraw` | Withdraw money (Debit) | Yes | Yes |
-| `POST` | `/api/wallets/refund/:transactionId` | Reverse a transaction | Yes | Yes |
-
-**Authentication:** All wallet endpoints require a valid JWT token in the `Authorization: Bearer <token>` header.
-
-**Idempotency:** State-mutating routes require an `Idempotency-Key` header to prevent duplicate processing.
-
-## Architecture & Folder Structure 
-
-LedgerPay follows Clean Architecture principles, ensuring a strict separation of concerns:
-
-```text
-src/
-├── config/             # Database and Redis client singletons
-├── controllers/        # Express route handlers
-│   ├── auth.controllers.ts    # Signup and login handlers
-│   └── wallet.controller.ts   # Wallet operation handlers
-├── middlewares/        # Authentication, idempotency, and error handling
-│   ├── auth.middleware.ts     # JWT verification
-│   └── idempotency.ts         # Duplicate request prevention
-├── routes/             # API routing definitions
-│   ├── auth.routes.ts         # Authentication endpoints
-│   └── wallet.routes.ts       # Wallet operation endpoints
-├── services/           # Core financial business logic and Prisma transactions
-│   └── ledger.service.ts      # Double-entry accounting logic
-├── dtos/               # Request validation schemas (Zod)
-├── app.ts              # Express application setup and Swagger configuration
-└── server.ts           # Application entry point
-```
-
-## Operational Considerations
-
-- **Immutability by design:** corrections use reversal transactions instead of edits.
-- **Failure safety:** any step failure in a money movement rolls back the full unit of work.
-- **Deterministic locking:** account IDs are sorted before locking to minimize deadlocks.
-
-## Scripts
-
-- `npm run dev` - start development server
