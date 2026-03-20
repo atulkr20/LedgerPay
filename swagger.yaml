@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: A production-grade FinTech wallet backend using double-entry accounting, row-level locking, and idempotency.
 servers:
-  - url: http://localhost:3000
+  - url: https://ledgerpay.itsatul.tech
 
 components:
   securitySchemes:
