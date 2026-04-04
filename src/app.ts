@@ -12,6 +12,14 @@ export const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Serve homepage
+const publicDir = path.join(__dirname, '../public');
+app.use(express.static(publicDir));
+
+app.get('/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
 const swaggerPath = path.join(__dirname, '../swagger.yaml');
 
 app.get('/api-docs.json', (_req: Request, res: Response) => {

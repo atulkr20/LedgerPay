@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LedgerPay — Production-Grade FinTech Backend</title>
+  <meta name="description" content="LedgerPay is a production-grade FinTech backend built on true Double-Entry Accounting. No balance columns. No race conditions. Just math that never lies." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #00ff88;
+      --green-dim: #00cc6a;
+      --green-glow: rgba(0,255,136,0.15);
+      --green-glow-strong: rgba(0,255,136,0.35);
+      --red: #ff4466;
+      --amber: #ffaa00;
+      --blue: #4488ff;
+      --bg: #060a0f;
+      --bg2: #0a1018;
+      --bg3: #0f1922;
+      --border: rgba(0,255,136,0.12);
+      --border-bright: rgba(0,255,136,0.4);
+      --text: #c8d8e8;
+      --text-dim: #5a7a8a;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Space Grotesk', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ── GRID BACKGROUND ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── SCANLINES ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.07) 2px,
+        rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── CANVAS (particles) ── */
+    #canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* ── NAVBAR ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 3rem;
+      height: 64px;
+      background: rgba(6,10,15,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 20px var(--green-glow-strong);
+    }
+
+    .nav-logo span { color: var(--text-dim); }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--green); }
+
+    .nav-cta {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--bg);
+      background: var(--green);
+      padding: 0.5rem 1.25rem;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .nav-cta:hover {
+      box-shadow: 0 0 24px var(--green-glow-strong);
+      transform: translateY(-1px);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      z-index: 2;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 100px 2rem 4rem;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--green);
+      border: 1px solid var(--border-bright);
+      padding: 0.35rem 1rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 2.5rem;
+      background: rgba(0,255,136,0.05);
+      animation: fadeSlideDown 0.8s ease both;
+    }
+
+    .hero-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    h1 {
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      animation: fadeSlideDown 0.8s 0.1s ease both;
+    }
+
+    h1 .line1 { display: block; color: var(--text); }
+    h1 .line2 {
+      display: block;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(255,255,255,0.15);
+    }
+    h1 .line3 {
+      display: block;
+      background: linear-gradient(90deg, var(--green), #00ccff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(0,255,136,0.4));
+    }
+
+    .hero-sub {
+      max-width: 560px;
+      font-size: 1.05rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+      margin-bottom: 3rem;
+      font-weight: 300;
+      animation: fadeSlideDown 0.8s 0.2s ease both;
+    }
+
+    .hero-sub strong { color: var(--text); font-weight: 500; }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: fadeSlideDown 0.8s 0.3s ease both;
+    }
+
+    .btn-primary {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--bg);
+      background: var(--green);
+      padding: 0.85rem 2rem;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+      transition: box-shadow 0.2s, transform 0.2s;
+      display: inline-block;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 32px var(--green-glow-strong), 0 0 60px var(--green-glow);
+      transform: translateY(-2px);
+    }
+
+    .btn-ghost {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: transparent;
+      padding: 0.85rem 2rem;
+      border: 1px solid var(--border-bright);
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      display: inline-block;
+      transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-ghost:hover {
+      color: var(--green);
+      border-color: var(--green);
+      box-shadow: 0 0 16px var(--green-glow);
+    }
+
+    /* ── LIVE LEDGER TICKER ── */
+    .ticker-wrap {
+      margin-top: 5rem;
+      width: 100%;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,255,136,0.02);
+      padding: 0.6rem 0;
+      animation: fadeSlideDown 0.8s 0.5s ease both;
+    }
+
+    .ticker {
+      display: flex;
+      gap: 4rem;
+      animation: ticker 28s linear infinite;
+      white-space: nowrap;
+      width: max-content;
+    }
+
+    .ticker-item {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .ticker-item .label { color: var(--text-dim); }
+    .ticker-item .credit { color: var(--green); }
+    .ticker-item .debit { color: var(--red); }
+    .ticker-item .neutral { color: var(--amber); }
+    .ticker-sep { color: var(--border-bright); }
+
+    @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* ── STATS STRIP ── */
+    .stats {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin: 0;
+      background: var(--bg2);
+    }
+
+    .stat {
+      padding: 3rem 2rem;
+      border-right: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      transition: background 0.3s;
+    }
+
+    .stat:last-child { border-right: none; }
+    .stat:hover { background: rgba(0,255,136,0.03); }
+
+    .stat::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--green);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.4s ease;
+    }
+
+    .stat:hover::before { transform: scaleX(1); }
+
+    .stat-num {
+      font-family: var(--mono);
+      font-size: 2.8rem;
+      font-weight: 700;
+      color: var(--green);
+      text-shadow: 0 0 20px var(--green-glow-strong);
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-family: var(--mono);
+    }
+
+    /* ── SECTION BASE ── */
+    section {
+      position: relative;
+      z-index: 2;
+    }
+
+    .section-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 6rem 2rem;
+    }
+
+    .section-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--green);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+      max-width: 520px;
+      font-weight: 300;
+    }
+
+    /* ── FEATURES GRID ── */
+    .features-section { background: var(--bg); }
+
+    .features-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: end;
+      margin-bottom: 4rem;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .feature-card {
+      background: var(--bg);
+      padding: 2.5rem 2rem;
+      transition: background 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card:hover { background: var(--bg2); }
+
+    .feature-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .feature-card:hover::after { opacity: 1; }
+
+    .feature-icon {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      margin-bottom: 1.25rem;
+      display: block;
+    }
+
+    .feature-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-desc {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    .feature-tag {
+      display: inline-block;
+      margin-top: 1rem;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--green);
+      background: rgba(0,255,136,0.08);
+      border: 1px solid rgba(0,255,136,0.2);
+      padding: 0.2rem 0.6rem;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── LEDGER VISUALIZER ── */
+    .ledger-section { background: var(--bg2); }
+
+    .ledger-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .ledger-terminal {
+      background: #050810;
+      border: 1px solid var(--border-bright);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0,255,136,0.08), inset 0 0 40px rgba(0,0,0,0.5);
+    }
+
+    .terminal-bar {
+      background: var(--bg3);
+      padding: 0.6rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .t-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .t-dot.r { background: #ff5f57; }
+    .t-dot.y { background: #febc2e; }
+    .t-dot.g { background: #28c840; }
+    .terminal-title { color: var(--text-dim); font-size: 0.7rem; margin-left: auto; }
+
+    .terminal-body { padding: 1.5rem; }
+
+    .t-line {
+      line-height: 1.8;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .t-prompt { color: var(--text-dim); }
+    .t-cmd { color: var(--text); }
+    .t-out-key { color: var(--green); }
+    .t-out-val-green { color: var(--green); }
+    .t-out-val-red { color: var(--red); }
+    .t-out-val { color: var(--amber); }
+    .t-comment { color: var(--text-dim); }
+    .t-indent { display: block; padding-left: 1.5rem; }
+    .t-blank { height: 0.8rem; }
+
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1em;
+      background: var(--green);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ── FLOW DIAGRAM ── */
+    .flow-section { background: var(--bg); }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-top: 4rem;
+      position: relative;
+    }
+
+    .flow-step {
+      padding: 2rem 1.5rem;
+      border: 1px solid var(--border);
+      margin-left: -1px;
+      position: relative;
+      text-align: center;
+      transition: border-color 0.3s, background 0.3s;
+      cursor: default;
+    }
+
+    .flow-step:hover {
+      background: rgba(0,255,136,0.04);
+      border-color: var(--green);
+      z-index: 1;
+    }
+
+    .flow-step:hover .flow-num { color: var(--green); text-shadow: 0 0 20px var(--green); }
+
+    .flow-num {
+      font-family: var(--mono);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--border-bright);
+      line-height: 1;
+      transition: all 0.3s;
+    }
+
+    .flow-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0.8rem 0 0.4rem;
+      letter-spacing: -0.01em;
+    }
+
+    .flow-detail {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+      font-family: var(--mono);
+    }
+
+    .flow-arrow {
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--green);
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+
+    .flow-step:last-child .flow-arrow { display: none; }
+
+    /* ── TECH STACK ── */
+    .stack-section { background: var(--bg2); }
+
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+
+    .stack-card {
+      background: var(--bg2);
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      transition: background 0.2s;
+    }
+
+    .stack-card:hover { background: var(--bg3); }
+
+    .stack-tech {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    .stack-role {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* ── CTA SECTION ── */
+    .cta-section { background: var(--bg); border-top: 1px solid var(--border); }
+
+    .cta-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 8rem 2rem;
+      text-align: center;
+    }
+
+    .cta-glow {
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(0,255,136,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-title {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+    }
+
+    .cta-sub {
+      font-size: 1rem;
+      color: var(--text-dim);
+      margin-bottom: 3rem;
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 2;
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+      padding: 2rem 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-left {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .footer-left strong { color: var(--green); }
+
+    .footer-right {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .footer-right a {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.08em;
+      transition: color 0.2s;
+    }
+
+    .footer-right a:hover { color: var(--green); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeSlideDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      nav { padding: 0 1.5rem; }
+      .nav-links { display: none; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .features-header { grid-template-columns: 1fr; gap: 1.5rem; }
+      .features-grid { grid-template-columns: 1fr 1fr; }
+      .ledger-split { grid-template-columns: 1fr; }
+      .flow-grid { grid-template-columns: 1fr; }
+      .flow-arrow { display: none; }
+      .stack-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 580px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .stack-grid { grid-template-columns: 1fr 1fr; }
+      footer { flex-direction: column; gap: 1rem; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">LEDGER<span>/</span>PAY</div>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#ledger">How It Works</a></li>
+    <li><a href="#stack">Stack</a></li>
+  </ul>
+  <a href="/api-docs" class="nav-cta">API Docs →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    <div class="dot"></div>
+    Production-Grade FinTech Backend
+  </div>
+
+  <h1>
+    <span class="line1">Money that</span>
+    <span class="line2">never lies.</span>
+    <span class="line3">Double-Entry.</span>
+  </h1>
+
+  <p class="hero-sub">
+    <strong>No balance columns. No race conditions. No ghost debits.</strong><br />
+    LedgerPay calculates balances dynamically using true double-entry accounting — the same model used by real financial institutions.
+  </p>
+
+  <div class="hero-buttons">
+    <a href="/api-docs" class="btn-primary" id="explore-api-btn">Explore the API</a>
+    <a href="https://github.com" class="btn-ghost" id="view-source-btn" target="_blank">View Source ↗</a>
+  </div>
+
+  <!-- TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker" id="ticker">
+      <span class="ticker-item"><span class="label">TXN#8f3a</span> <span class="credit">CREDIT +₹5,000</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#2b9c</span> <span class="debit">DEBIT −₹2,300</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">IDEMPOTENCY</span> <span class="neutral">CACHE HIT — Redis</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#7d1e</span> <span class="credit">TRANSFER +₹12,500</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">LOCK</span> <span class="neutral">SELECT FOR UPDATE — sorted</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#4a2f</span> <span class="debit">WITHDRAW −₹800</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">COMMIT</span> <span class="credit">ACID — ROLLBACK SAFE</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#9c7b</span> <span class="credit">REFUND +₹3,200</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">BALANCE</span> <span class="neutral">SUM(credits) − SUM(debits)</span> <span class="ticker-sep">|</span></span>
+      <!-- Duplicate for seamless loop -->
+      <span class="ticker-item"><span class="label">TXN#8f3a</span> <span class="credit">CREDIT +₹5,000</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#2b9c</span> <span class="debit">DEBIT −₹2,300</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">IDEMPOTENCY</span> <span class="neutral">CACHE HIT — Redis</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#7d1e</span> <span class="credit">TRANSFER +₹12,500</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">LOCK</span> <span class="neutral">SELECT FOR UPDATE — sorted</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#4a2f</span> <span class="debit">WITHDRAW −₹800</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">COMMIT</span> <span class="credit">ACID — ROLLBACK SAFE</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">TXN#9c7b</span> <span class="credit">REFUND +₹3,200</span> <span class="ticker-sep">|</span></span>
+      <span class="ticker-item"><span class="label">BALANCE</span> <span class="neutral">SUM(credits) − SUM(debits)</span> <span class="ticker-sep">|</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats" id="stats-strip">
+  <div class="stat reveal">
+    <div class="stat-num" data-target="100">0</div>
+    <div class="stat-label">% ACID Compliant</div>
+  </div>
+  <div class="stat reveal">
+    <div class="stat-num" data-target="0">0</div>
+    <div class="stat-label">Balance Columns (derived)</div>
+  </div>
+  <div class="stat reveal">
+    <div class="stat-num" data-suffix="h">24</div>
+    <div class="stat-label">Idempotency TTL</div>
+  </div>
+  <div class="stat reveal">
+    <div class="stat-num" data-target="2">0</div>
+    <div class="stat-label">Ledger Entries per Transfer</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features-section" id="features">
+  <div class="section-inner">
+    <div class="features-header reveal">
+      <div>
+        <div class="section-eyebrow">// Core Architecture</div>
+        <h2 class="section-title">Built like a bank. Wired like a startup.</h2>
+      </div>
+      <p class="section-subtitle">Every design decision here is made to handle real-world concurrency, data integrity, and financial auditability at scale.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <span class="feature-icon">⊕</span>
+        <div class="feature-title">Double-Entry Accounting</div>
+        <p class="feature-desc">Every money movement creates immutable debit + credit ledger rows. Balances are derived, never stored. The books always balance.</p>
+        <span class="feature-tag">DEBIT + CREDIT = 0</span>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">⚿</span>
+        <div class="feature-title">Row-Level Locking</div>
+        <p class="feature-desc">SELECT … FOR UPDATE with sorted account IDs. No deadlocks. No phantom reads. Concurrent transfers on the same wallet pair are safely serialized.</p>
+        <span class="feature-tag">PostgreSQL FOR UPDATE</span>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">◈</span>
+        <div class="feature-title">Idempotency Engine</div>
+        <p class="feature-desc">Every state-changing request carries an Idempotency-Key. Redis checks it before any DB hit — retries return the exact same response.</p>
+        <span class="feature-tag">Redis 24h TTL</span>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">⬡</span>
+        <div class="feature-title">ACID Transactions</div>
+        <p class="feature-desc">All money movements run inside prisma.$transaction. Mid-flight failures roll back completely. No partial debits, no ghost credits.</p>
+        <span class="feature-tag">Prisma.$transaction</span>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">↺</span>
+        <div class="feature-title">Financial Immutability</div>
+        <p class="feature-desc">Transactions are never deleted or edited. Refunds create new inverse-entry transactions. Every movement is permanently auditable.</p>
+        <span class="feature-tag">Immutable Ledger</span>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">⬟</span>
+        <div class="feature-title">Type-Safe by Default</div>
+        <p class="feature-desc">Zod validates every request at the boundary. Prisma generates fully typed DB clients. TypeScript enforces it all at compile time.</p>
+        <span class="feature-tag">Zod + Prisma + TS</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEDGER VISUALIZER -->
+<section class="ledger-section" id="ledger">
+  <div class="section-inner">
+    <div class="ledger-split">
+      <div class="reveal">
+        <div class="section-eyebrow">// How it works</div>
+        <h2 class="section-title">Math that never lies</h2>
+        <p class="section-subtitle" style="margin-bottom:2rem;">No stored balance. When you call <code style="font-family:var(--mono);color:var(--green);font-size:0.85em">/balance</code>, PostgreSQL runs a live aggregation across all ledger entries. The result is always exact.</p>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;margin-top:2rem;">
+          <div style="display:flex;gap:1rem;align-items:center;">
+            <div style="width:36px;height:36px;border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.8rem;color:var(--green);flex-shrink:0;">01</div>
+            <div>
+              <div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:0.2rem;">Request hits JWT middleware</div>
+              <div style="font-size:0.78rem;color:var(--text-dim);font-family:var(--mono);">Bearer token verified, userId extracted</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:center;">
+            <div style="width:36px;height:36px;border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.8rem;color:var(--green);flex-shrink:0;">02</div>
+            <div>
+              <div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:0.2rem;">Idempotency key checked in Redis</div>
+              <div style="font-size:0.78rem;color:var(--text-dim);font-family:var(--mono);">Cache hit → return early. Miss → proceed.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:center;">
+            <div style="width:36px;height:36px;border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.8rem;color:var(--green);flex-shrink:0;">03</div>
+            <div>
+              <div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:0.2rem;">Row locks acquired in sorted order</div>
+              <div style="font-size:0.78rem;color:var(--text-dim);font-family:var(--mono);">Deadlock-proof via lexicographic ID sort</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:center;">
+            <div style="width:36px;height:36px;border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.8rem;color:var(--green);flex-shrink:0;">04</div>
+            <div>
+              <div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:0.2rem;">Debit + Credit entries inserted atomically</div>
+              <div style="font-size:0.78rem;color:var(--text-dim);font-family:var(--mono);">Single ACID transaction — all or nothing</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal ledger-terminal">
+        <div class="terminal-bar">
+          <div class="t-dot r"></div>
+          <div class="t-dot y"></div>
+          <div class="t-dot g"></div>
+          <span class="terminal-title">ledger.service.ts</span>
+        </div>
+        <div class="terminal-body">
+          <div class="t-line"><span class="t-prompt">$</span><span class="t-cmd"> POST /wallets/:id/transfer</span></div>
+          <div class="t-blank"></div>
+          <div class="t-line"><span class="t-out-key">→ Idempotency-Key:</span> <span class="t-out-val">"txn_8f3acd"</span></div>
+          <div class="t-line"><span class="t-out-key">→ Redis:</span> <span class="t-comment">CACHE MISS — proceeding</span></div>
+          <div class="t-blank"></div>
+          <div class="t-line"><span class="t-out-key">→ BEGIN TRANSACTION</span></div>
+          <div class="t-line"><span class="t-indent"><span class="t-out-key">LOCK</span> <span class="t-out-val">acct_abc, acct_xyz</span> <span class="t-comment">// sorted</span></span></div>
+          <div class="t-line"><span class="t-indent"><span class="t-out-key">INSERT</span> <span class="t-out-val-red">DEBIT  −₹5,000</span> <span class="t-comment">// from</span></span></div>
+          <div class="t-line"><span class="t-indent"><span class="t-out-key">INSERT</span> <span class="t-out-val-green">CREDIT +₹5,000</span> <span class="t-comment">// to</span></span></div>
+          <div class="t-line"><span class="t-indent"><span class="t-out-key">INSERT</span> <span class="t-out-val">Transaction record</span></span></div>
+          <div class="t-line"><span class="t-out-key">→ COMMIT</span> <span class="t-comment">✓ ACID</span></div>
+          <div class="t-blank"></div>
+          <div class="t-line"><span class="t-out-key">→ Redis:</span> <span class="t-comment">CACHE result 24h TTL</span></div>
+          <div class="t-blank"></div>
+          <div class="t-line"><span class="t-out-key">balance</span> <span class="t-comment">= SUM(credits) − SUM(debits)</span></div>
+          <div class="t-line"><span class="t-indent"><span class="t-out-val-green">₹18,450.00</span> <span class="t-comment">← derived, never stored</span></span></div>
+          <div class="t-blank"></div>
+          <div class="t-line"><span class="t-prompt">$</span> <span class="cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REQUEST FLOW -->
+<section class="flow-section" id="flow">
+  <div class="section-inner">
+    <div class="reveal">
+      <div class="section-eyebrow">// Request Pipeline</div>
+      <h2 class="section-title">Every request, every layer.</h2>
+    </div>
+    <div class="flow-grid reveal">
+      <div class="flow-step">
+        <div class="flow-num">01</div>
+        <div class="flow-name">Client Request</div>
+        <div class="flow-detail">HTTP with Bearer token + Idempotency-Key header</div>
+        <div class="flow-arrow">→</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">02</div>
+        <div class="flow-name">JWT Auth</div>
+        <div class="flow-detail">Verify token, extract userId, reject invalid tokens</div>
+        <div class="flow-arrow">→</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">03</div>
+        <div class="flow-name">Idempotency</div>
+        <div class="flow-detail">Redis cache check — hit returns early, miss sets lock</div>
+        <div class="flow-arrow">→</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">04</div>
+        <div class="flow-name">LedgerService</div>
+        <div class="flow-detail">ACID transaction, row locks, debit+credit entries</div>
+        <div class="flow-arrow">→</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">05</div>
+        <div class="flow-name">Response</div>
+        <div class="flow-detail">Cached in Redis, returned to client — safe to retry</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section class="stack-section" id="stack">
+  <div class="section-inner">
+    <div class="reveal">
+      <div class="section-eyebrow">// Tech Stack</div>
+      <h2 class="section-title">No shortcuts. No abstractions hiding bugs.</h2>
+    </div>
+    <div class="stack-grid reveal">
+      <div class="stack-card">
+        <div class="stack-tech">Node.js + TypeScript</div>
+        <div class="stack-role">Core server runtime. Type-safe from HTTP boundary to DB query.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">Express.js</div>
+        <div class="stack-role">Minimal, composable middleware chain. JWT → Idempotency → Route.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">PostgreSQL</div>
+        <div class="stack-role">Primary store. ACID transactions, row-level locking, aggregate balance.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">Prisma ORM</div>
+        <div class="stack-role">Type-safe queries, transaction support, schema-first migrations.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">Redis (ioredis)</div>
+        <div class="stack-role">Idempotency cache with 24h TTL and 10s processing lock.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">JWT + bcryptjs</div>
+        <div class="stack-role">Stateless auth. Hashed passwords. Token-verified middleware.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">Zod</div>
+        <div class="stack-role">Runtime request validation at every endpoint boundary.</div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-tech">Docker</div>
+        <div class="stack-role">Local PostgreSQL + Redis via compose. One command, full stack.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-inner reveal" style="position:relative;">
+    <div class="cta-glow"></div>
+    <div class="section-eyebrow" style="margin-bottom:1.5rem;">// Ready to explore?</div>
+    <h2 class="cta-title">
+      Explore the full<br />
+      <span style="color:var(--green);filter:drop-shadow(0 0 20px rgba(0,255,136,0.5))">API reference.</span>
+    </h2>
+    <p class="cta-sub">Interactive Swagger docs. Every endpoint documented with request/response schemas, auth requirements, and idempotency notes.</p>
+    <a href="/api-docs" class="btn-primary" id="cta-api-btn">Open API Docs →</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    <strong>LEDGER/PAY</strong> — Production-grade FinTech backend.<br />
+    <span style="font-size:0.65rem;">Double-Entry · ACID · Idempotent · Type-Safe</span>
+  </div>
+  <div class="footer-right">
+    <a href="/api-docs">API Docs</a>
+    <a href="/api-docs.json">OpenAPI JSON</a>
+    <a href="https://github.com" target="_blank">GitHub ↗</a>
+  </div>
+</footer>
+
+<script>
+  // ── PARTICLE CANVAS ──
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function Particle() {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.r = Math.random() * 1.2 + 0.3;
+    this.alpha = Math.random() * 0.5 + 0.1;
+  }
+
+  function initParticles() {
+    particles = [];
+    const count = Math.floor((W * H) / 14000);
+    for (let i = 0; i < count; i++) particles.push(new Particle());
+  }
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,255,136,${p.alpha})`;
+      ctx.fill();
+    }
+    // lines between close particles
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 100) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(0,255,136,${0.06 * (1 - d / 100)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(drawParticles);
+  }
+
+  resize();
+  initParticles();
+  drawParticles();
+  window.addEventListener('resize', () => { resize(); initParticles(); });
+
+  // ── SCROLL REVEAL ──
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  reveals.forEach(el => observer.observe(el));
+
+  // ── COUNTER ANIMATION ──
+  function animateCount(el, target, suffix = '') {
+    let start = 0;
+    const duration = 1600;
+    const step = (timestamp) => {
+      if (!start) start = timestamp;
+      const progress = Math.min((timestamp - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(ease * target) + suffix;
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  const statsObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        document.querySelectorAll('.stat-num[data-target]').forEach(el => {
+          animateCount(el, parseInt(el.dataset.target), el.dataset.suffix || '');
+        });
+        statsObserver.disconnect();
+      }
+    });
+  }, { threshold: 0.3 });
+  statsObserver.observe(document.getElementById('stats-strip'));
+</script>
+</body>
+</html>
