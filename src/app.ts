@@ -12,12 +12,20 @@ export const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve homepage
-const publicDir = path.join(__dirname, '../public');
-app.use(express.static(publicDir));
-
 app.get('/', (_req: Request, res: Response) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
+  res.json({
+    "service": "LedgerPay",
+    "description": "Double-entry wallet system with ACID-compliant transactions",
+    "version": "1.0.0",
+    "status": "ok",
+    "features": [
+      "Double-entry bookkeeping",
+      "Idempotent transaction processing",
+      "Row-level locking for concurrency safety"
+    ],
+    "github": "github.com/atulkr20/ledgerpay",
+    "live": "ledgerpay.itsatul.tech/api-docs"
+  });
 });
 
 const swaggerPath = path.join(__dirname, '../swagger.yaml');

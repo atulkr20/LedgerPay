@@ -6,9 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// -----------------------------------------------------------------------------
-// NEW: User Table for Authentication (JWT)
-// -----------------------------------------------------------------------------
+// User Table for Authentication (JWT)
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -37,7 +35,7 @@ model LedgerAccount {
   createdAt DateTime      @default(now())
 }
 
-// 3. The overall event (e.g., "Transfer $50 from Alice to Bob")
+// 3. The overall event (e.g., "Transfer $50 from Atul to satyam")
 model Transaction {
   id          String        @id @default(uuid())
   referenceId String        @unique // Helps us prevent duplicate transactions
@@ -64,9 +62,8 @@ model LedgerEntry {
   @@index([transactionId])
 }
 
-// -----------------------------------------------------------------------------
-// NEW: DB-Backed Idempotency Table (Bulletproof against double spending)
-// -----------------------------------------------------------------------------
+
+//  DB-Backed Idempotency Table (Bulletproof against double spending)
 model IdempotencyKey {
   key            String   @id
   responseStatus Int?     // Saves the HTTP status (e.g., 200, 400)
