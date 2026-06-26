@@ -6,7 +6,8 @@
   "scripts": {
     "build": "npx prisma generate && npx prisma db push && tsc",
     "start": "node dist/server.js",
-    "dev": "nodemon --watch src --watch swagger.yaml --ext ts,json,yaml,yml src/server.ts"
+    "dev": "nodemon --watch src --watch swagger.yaml --ext ts,json,yaml,yml src/server.ts",
+    "benchmark": "npx ts-node benchmarks/benchmark.ts"
   },
   "keywords": [],
   "author": "",
