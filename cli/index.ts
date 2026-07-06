@@ -363,6 +363,30 @@ async function withdraw() {
   await ask('Press Enter to continue...');
 }
 
+async function refund() {
+  banner();
+  console.log(BOLD('  REFUND TRANSACTION\n'));
+  const txIdRaw = await ask('Original Transaction ID: ');
+  const txId = txIdRaw.replace(/[^0-9a-fA-F-]/g, '').trim().toLowerCase();
+
+  info('Executing double-entry refund reversal...');
+  const r = await api(
+    'POST', '/api/wallets/refund',
+    { originalTransactionId: txId },
+    session.token,
+    'ref-' + Date.now()
+  );
+
+  if (r.success) {
+    ok('Transaction refunded successfully.');
+    info('Refund Transaction ID: ' + r.transaction.id);
+  } else {
+    err(r.error || 'Refund failed');
+  }
+  console.log('');
+  await ask('Press Enter to continue...');
+}
+
 async function txHistory() {
   info('Fetching ledger entries...');
   const r = await api(
@@ -424,6 +448,7 @@ async function loggedInMenu(): Promise<boolean> {
     'Deposit Money',
     'Transfer Funds',
     'Withdraw Money',
+    'Refund Transaction',
     'Log Out',
     'Exit Application'
   ];
@@ -435,12 +460,13 @@ async function loggedInMenu(): Promise<boolean> {
     case 2: await deposit(); break;
     case 3: await transfer(); break;
     case 4: await withdraw(); break;
-    case 5:
+    case 5: await refund(); break;
+    case 6:
       session.token = ''; session.accountId = ''; session.email = '';
       ok('Logged out successfully.');
       await ask('Press Enter to continue...');
       break;
-    case 6: return false;
+    case 7: return false;
   }
   return true;
 }
