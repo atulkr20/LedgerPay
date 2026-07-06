@@ -150,22 +150,27 @@ User (1:1) → Wallet (1:many) → Accounts → LedgerEntries
 
 ## Folder Structure
 ```
-src/
-├── config/               # DB and Redis client singletons
-├── controllers/
-│   ├── auth.controllers.ts
-│   └── wallet.controller.ts
-├── middlewares/
-│   ├── auth.middleware.ts       # JWT verification
-│   └── idempotency.ts           # Duplicate request prevention
-├── routes/
-│   ├── auth.routes.ts
-│   └── wallet.routes.ts
-├── services/
-│   └── ledger.service.ts        # Core double-entry logic
-├── dtos/                        # Zod validation schemas
-├── app.ts
-└── server.ts
+├── cli/                  # Visual TUI terminal client
+├── benchmarks/           # High-concurrency performance tests
+├── src/
+│   ├── config/           # DB and Redis client singletons
+│   ├── controllers/
+│   │   ├── auth.controllers.ts
+│   │   └── wallet.controller.ts
+│   ├── middlewares/
+│   │   ├── auth.middleware.ts   # JWT verification
+│   │   └── idempotency.ts       # Duplicate request prevention
+│   ├── routes/
+│   │   ├── auth.routes.ts
+│   │   └── wallet.routes.ts
+│   ├── services/
+│   │   └── ledger.service.ts    # Core double-entry logic
+│   ├── terminal/         # Web-based shell for the visual CLI
+│   │   ├── public/       # HTML & styling for xterm.js
+│   │   └── terminal.routes.ts
+│   ├── dtos/             # Zod validation schemas
+│   ├── app.ts
+│   └── server.ts
 ```
 
 ---
