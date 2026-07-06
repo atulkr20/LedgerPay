@@ -415,6 +415,7 @@ async function txHistory() {
     const statusColored = (statusStr === 'SUCCESS' ? GREEN(statusStr) : YELLOW(statusStr)) + ' '.repeat(18 - statusStr.length);
 
     console.log(TEAL('  │ ') + date + type + entry + amtColored + statusColored + TEAL(' │'));
+    console.log(TEAL('  │ ') + DIM(`  ↳ ID: ${e.transaction.id}`.padEnd(80)) + TEAL(' │'));
   }
 
   console.log(TEAL('  └' + '─'.repeat(80) + '┘'));
