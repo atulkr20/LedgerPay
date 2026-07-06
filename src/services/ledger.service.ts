@@ -90,6 +90,22 @@ export class LedgerService {
             FOR UPDATE
             `;
 
+            // Verify both accounts exist to prevent foreign key errors
+            const accounts = await tx.ledgerAccount.findMany({
+                where: { id: { in: accountIds } },
+                select: { id: true }
+            });
+
+            if (accounts.length < 2) {
+                const foundIds = accounts.map(a => a.id);
+                if (!foundIds.includes(fromAccountId)) {
+                    throw new Error("NOT_FOUND: Sender account not found");
+                }
+                if (!foundIds.includes(toAccountId)) {
+                    throw new Error("NOT_FOUND: Recipient account not found");
+                }
+            }
+
             // Checking the balance safely 
             const balanceCheck = await tx.ledgerEntry.aggregate({
                 where: { ledgerAccountId: fromAccountId },

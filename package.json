@@ -6,7 +6,7 @@
   "scripts": {
     "build": "npx prisma generate && npx prisma db push && tsc",
     "start": "node dist/server.js",
-    "dev": "nodemon --watch src --watch swagger.yaml --ext ts,json,yaml,yml src/server.ts",
+    "dev": "cross-env TS_NODE_CACHE=false nodemon --watch src --watch swagger.yaml --ext ts,json,yaml,yml src/server.ts",
     "benchmark": "npx ts-node benchmarks/benchmark.ts"
   },
   "keywords": [],
@@ -23,6 +23,7 @@
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "@types/yamljs": "^0.2.34",
+    "cross-env": "^10.1.0",
     "nodemon": "^3.1.13",
     "prisma": "^7.4.1",
     "ts-node": "^10.9.2",

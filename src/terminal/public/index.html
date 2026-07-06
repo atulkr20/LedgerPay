@@ -29,6 +29,7 @@
     // 1. Create the terminal
     var term = new Terminal({
       cursorBlink: true,
+      convertEol: true,       // converts \n → \r\n so lines start at the left edge
       fontSize: 15,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
@@ -55,10 +56,31 @@
       term.write(event.data);
     };
 
-    // 6. When user types, send keypresses to the server
+    // 6. When user types, echo it on screen AND send to server
     term.onData(function(data) {
-      ws.send(data);
+      if (data === '\r') {
+        term.write('\r\n');   // Enter — move to next line visually
+      } else if (data === '\x7f') {
+        term.write('\b \b'); // Backspace — erase the character
+      } else {
+        term.write(data);    // Normal character — show it on screen
+      }
+      ws.send(data);         // Always forward to the CLI process
     });
+
+    // 6.5 Capture all paste events (Ctrl+V, Cmd+V, Shift+Insert, right-click paste)
+    // We attach it in the CAPTURE phase (true) so we get the event before xterm.js consumes/swallows it.
+    document.getElementById('terminal-container').addEventListener('paste', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var text = (e.clipboardData || window.clipboardData).getData('text');
+      if (text) {
+        // Strip carriage returns and newlines so pasting doesn't auto-submit
+        var cleanText = text.replace(/[\r\n]+/g, '');
+        term.write(cleanText);
+        ws.send(cleanText);
+      }
+    }, true);
 
     // 7. Resize terminal when window resizes
     window.addEventListener('resize', function() {

@@ -6,9 +6,11 @@ import { Request, Response, NextFunction } from 'express';
 export const validate = (schema: z.ZodTypeAny) => {
     return (req: Request, res: Response, next: NextFunction) => {
         try{
+            console.log(`[Validation Input] body:`, req.body);
             req.body = schema.parse(req.body);
             next();
         } catch (error: any) {
+            console.error(`[Validation Failed] error:`, error);
             // 400 if user sent invalid data
             const details = error?.errors ?? error?.issues ?? error?.message ?? 'Invalid request body';
             return res.status(400).json({ error: details });

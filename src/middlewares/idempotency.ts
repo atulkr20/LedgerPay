@@ -47,13 +47,13 @@ export const idempotency = async (req: Request, res: Response, next: NextFunctio
 
         const originalSendFunction = res.json.bind(res);
 
-        res.json  =((body: any) => {
+        res.json = ((body: any) => {
             if(res.statusCode >= 200 && res.statusCode < 300) {
                 // Save teh final receipt in Redis for 24 hours
                 redis.set(`idempotency:${ticketNumber}`, JSON.stringify(body), 'EX', 86400).catch(console.error);
             } else {
-                console.log(`Request failed with ${ res.statusCode}.Removing processing lock.`);
-                
+                console.log(`Request failed with ${ res.statusCode}. Removing processing lock.`);
+                redis.del(`idempotency:${ticketNumber}`).catch(console.error);
             }
             // If failed remove the lock so that user can retry
                 return originalSendFunction(body);
