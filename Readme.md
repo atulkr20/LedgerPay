@@ -213,3 +213,12 @@ Test strategy:
 
 ---
 
+## Performance Benchmarks
+Validate the system under high-concurrency operation:
+```bash
+npm run benchmark
+```
+
+#### Benchmark Results:
+![Benchmark Results](benchmark_results.png)
+

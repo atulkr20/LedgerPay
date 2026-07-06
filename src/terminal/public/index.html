@@ -86,19 +86,70 @@
       ws.send(data);         // Always forward to the CLI process
     });
 
-    // 6.5 Capture all paste events (Ctrl+V, Cmd+V, Shift+Insert, right-click paste)
-    // We attach it in the CAPTURE phase (true) so we get the event before xterm.js consumes/swallows it.
-    document.getElementById('terminal-container').addEventListener('paste', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      var text = (e.clipboardData || window.clipboardData).getData('text');
+    // 6.5 Clipboard Paste Interceptors (Ctrl+V, Cmd+V, Right-Click, and standard paste events)
+    
+    function handlePasteText(text) {
       if (text) {
-        // Strip carriage returns and newlines so pasting doesn't auto-submit
+        // Strip carriage returns and newlines to prevent auto-submitting or state issues
         var cleanText = text.replace(/[\r\n]+/g, '');
         term.write(cleanText);
         ws.send(cleanText);
       }
+    }
+
+    // A. Intercept standard paste events on document level in capture phase
+    document.addEventListener('paste', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var text = (e.clipboardData || window.clipboardData).getData('text');
+      handlePasteText(text);
     }, true);
+
+    // B. Intercept Ctrl+C / Ctrl+V key combinations
+    document.addEventListener('keydown', function(e) {
+      // Copy: Ctrl+C or Cmd+C (only if there is active selection in terminal)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+        if (term.hasSelection()) {
+          e.preventDefault();
+          e.stopPropagation();
+          var selection = term.getSelection();
+          navigator.clipboard.writeText(selection).catch(function(err) {
+            console.error('Ctrl+C clipboard copy failed:', err);
+          });
+        }
+      }
+      // Paste: Ctrl+V or Cmd+V
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard.readText().then(function(text) {
+          handlePasteText(text);
+        }).catch(function(err) {
+          console.error('Async clipboard read failed:', err);
+        });
+      }
+    }, true);
+
+    // C. Intercept right-clicks for instant PowerShell-style paste
+    document.getElementById('terminal-container').addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      navigator.clipboard.readText().then(function(text) {
+        handlePasteText(text);
+      }).catch(function(err) {
+        console.error('Right-click clipboard read failed:', err);
+      });
+    }, true);
+
+    // D. Auto-copy on mouse selection (Unix/PuTTY-style copy on highlight)
+    term.onSelectionChange(function() {
+      if (term.hasSelection()) {
+        var selection = term.getSelection();
+        navigator.clipboard.writeText(selection).catch(function(err) {
+          console.error('Auto-copy selection failed:', err);
+        });
+      }
+    });
 
     // 7. Resize terminal when window resizes
     window.addEventListener('resize', function() {
