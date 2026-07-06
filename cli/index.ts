@@ -89,9 +89,16 @@ function readLine(): Promise<string> {
   });
 }
 
-async function ask(label: string): Promise<string> {
+async function ask(label: string, isPassword = false): Promise<string> {
+  if (isPassword) {
+    process.stdout.write('\x01echo_off\x02');
+  }
   process.stdout.write(TEAL('  ➔ ') + WHITE(label));
-  return readLine();
+  const val = await readLine();
+  if (isPassword) {
+    process.stdout.write('\x01echo_on\x02');
+  }
+  return val;
 }
 
 function chooseOption(options: string[], defaultIndex = 0): Promise<number> {
@@ -218,7 +225,7 @@ async function signup() {
   banner();
   console.log(BOLD('  SIGN UP\n'));
   const email    = await ask('Email:             ');
-  const password = await ask('Password:          ');
+  const password = await ask('Password:          ', true);
   const name     = await ask('Name (optional):   ');
 
   info('Creating account...');
@@ -237,7 +244,7 @@ async function login() {
   banner();
   console.log(BOLD('  LOGIN\n'));
   const email    = await ask('Email:    ');
-  const password = await ask('Password: ');
+  const password = await ask('Password: ', true);
 
   info('Authenticating...');
   const r = await api('POST', '/api/auth/login', { email, password });

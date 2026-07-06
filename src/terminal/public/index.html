@@ -51,9 +51,20 @@
     //    window.location.host gives us the current domain automatically
     var ws = new WebSocket('ws://' + window.location.host);
 
+    var echoActive = true;
+
     // 5. When server sends data, write it to the terminal screen
     ws.onmessage = function(event) {
-      term.write(event.data);
+      var data = event.data;
+      if (data.indexOf('\x01echo_off\x02') !== -1) {
+        echoActive = false;
+        data = data.replace(/\x01echo_off\x02/g, '');
+      }
+      if (data.indexOf('\x01echo_on\x02') !== -1) {
+        echoActive = true;
+        data = data.replace(/\x01echo_on\x02/g, '');
+      }
+      term.write(data);
     };
 
     // 6. When user types, echo it on screen AND send to server
@@ -61,9 +72,16 @@
       if (data === '\r') {
         term.write('\r\n');   // Enter — move to next line visually
       } else if (data === '\x7f') {
-        term.write('\b \b'); // Backspace — erase the character
+        term.write('\b \b'); // Backspace — erase the character visually
       } else {
-        term.write(data);    // Normal character — show it on screen
+        if (echoActive) {
+          term.write(data);    // Normal character — show it on screen
+        } else {
+          // Masked mode: write '*' only for standard single-character printable inputs
+          if (data.length === 1 && data >= ' ' && data <= '~') {
+            term.write('*');
+          }
+        }
       }
       ws.send(data);         // Always forward to the CLI process
     });
