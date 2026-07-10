@@ -4,10 +4,6 @@
  * Measures throughput & latency of core operations against
  * a real PostgreSQL + Redis stack.
  *
- * Usage:
- *   docker-compose up -d
- *   npx ts-node benchmarks/benchmark.ts
- *
  * Tests:
  *   1. Deposit throughput        - single-account ACID writes
  *   2. Transfer throughput       - double-entry + row-level locking
