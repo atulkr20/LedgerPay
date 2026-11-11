@@ -49,7 +49,7 @@
 
     // 4. Connect to our WebSocket server
     //    window.location.host gives us the current domain automatically
-    var ws = new WebSocket('ws://' + window.location.host);
+    var ws = new WebSocket((window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host);
 
     var echoActive = true;
 

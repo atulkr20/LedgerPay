@@ -129,6 +129,7 @@ export class LedgerService {
         });
         // Move the money
         await tx.ledgerEntry.createMany({
+           
             data: [
                 //DEBIT: subtract the money from the sender
                 {

@@ -11,8 +11,8 @@ export function setupTerminal(server: http.Server) {
     wss.on('connection', function(ws) {
         console.log('[Terminal] New browser session connected');
 
-        // Spawn the CLI using Node's built-in child_process
-        const shell = spawn('node', ['-r', 'ts-node/register', 'cli/index.ts'], {
+        // Spawn the compiled CLI (works in both dev and production docker)
+        const shell = spawn('node', ['dist/cli/index.js'], {
             cwd: process.cwd(),
             env: process.env,
             stdio: ['pipe', 'pipe', 'pipe']
